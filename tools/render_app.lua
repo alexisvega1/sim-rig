@@ -1,15 +1,19 @@
 -- Run the in-game app with stand-in game functions whose drawing calls write an SVG, to look at a window off-game.
---   lua -e "W=980 H=300 RPM=8200" tools/render_app.lua assetto-corsa/apps/rig_power/rig_power.lua windowCluster out.svg
--- GRAPH=true shows the gauge in its graph-only mode, LAYOUT=2 the cluster's second arrangement.
+-- Run it from this folder (it reads track_pts.lua, one recorded lap's line, for the track map):
+--   lua -e "W=980 H=300 RPM=8200 LAYOUT=3" render_app.lua ../assetto-corsa/apps/rig_power/rig_power.lua windowCluster out.svg
+-- GRAPH=true shows the gauge in its graph-only mode; LAYOUT picks the cluster arrangement; WHOLE=true the whole-circuit map.
 -- Text widths are estimated, so spacing is close to the game's but not exact.
 local out = {}
 local function css(c) return string.format('rgba(%d,%d,%d,%.2f)', math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5), c[4] or 1) end
 vec2 = function(x, y) return { x = x, y = y } end
 rgbm = function(r, g, b, a) return { r, g, b, a } end
-local car = { rpm = RPM or 10400, turboBoost = 4.71, gas = 1, gear = 5, rpmLimiter = LIMIT or 12000, drivetrainTorque = 0, drivetrainPower = 0, turboCount = 2, speedKmh = 372, acceleration = { x = 1.6, y = 0, z = -1.9 }, brake = 0.8, steer = 40, turboWastegates = { [0] = 0.8, [1] = 0.8 } }
-local stored = { map = 2, sound = 6, rev = 2, graphOnly = GRAPH or false, clusterLayout = LAYOUT or 1 }
+local TP = dofile('track_pts.lua')
+local car = { rpm = RPM or 10400, turboBoost = 4.71, gas = 1, gear = 5, rpmLimiter = LIMIT or 12000, drivetrainTorque = 0, drivetrainPower = 0, turboCount = 2, speedKmh = 372, position = { x = TP[math.floor(#TP * (AT or 0.12))][1], y = 0, z = TP[math.floor(#TP * (AT or 0.12))][2] }, look = { x = TP[math.floor(#TP * (AT or 0.12)) + 2][1] - TP[math.floor(#TP * (AT or 0.12))][1], y = 0, z = TP[math.floor(#TP * (AT or 0.12)) + 2][2] - TP[math.floor(#TP * (AT or 0.12))][2] }, acceleration = { x = 1.6, y = 0, z = -1.9 }, brake = 0.8, steer = 40, turboWastegates = { [0] = 0.8, [1] = 0.8 } }
+local stored = { map = 2, sound = 6, rev = 2, graphOnly = GRAPH or false, clusterLayout = LAYOUT or 1, mapWhole = WHOLE or false }
 local path = {}
 ac = {
+  hasTrackSpline = function() return true end, getSim = function() return { trackLengthM = 6430 } end,
+  trackProgressToWorldCoordinate = function(v) local p = TP[math.floor(v * #TP) % #TP + 1]; return { x = p[1], y = 0, z = p[2] } end,
   FolderID = { Root = 1, ContentCars = 13 }, getFolder = function() return 'C:/ac' end,
   storage = function(t) return setmetatable({}, { __index = function(_, k) local v = stored[k]; if v == nil then v = t[k] end; return v end, __newindex = function(_, k, v) stored[k] = v end }) end,
   getCar = function() return car end, getCarID = function() return 'porsche_911_gt2_rs_wss_2000' end, isAudioReady = function() return true end,
@@ -26,6 +30,7 @@ ui = setmetatable({
   dwriteDrawText = function(t, s, p, c) out[#out + 1] = string.format('<text x="%.1f" y="%.1f" font-size="%.1f" fill="%s" font-family="Helvetica, Arial" font-weight="600">%s</text>', p.x, p.y + s * 0.92, s, css(c), tostring(t):gsub('&', '&amp;')) end,
   drawCircleFilled = function(c, r, col) out[#out + 1] = string.format('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>', c.x, c.y, r, css(col)) end,
   drawCircle = function(c, r, col, seg, th) out[#out + 1] = string.format('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" stroke="%s" stroke-width="%.1f"/>', c.x, c.y, r, css(col), th or 1) end,
+  drawTriangleFilled = function(a, b, cc, col) out[#out + 1] = string.format('<polygon points="%.1f,%.1f %.1f,%.1f %.1f,%.1f" fill="%s"/>', a.x, a.y, b.x, b.y, cc.x, cc.y, css(col)) end,
   drawLine = function(a, b, col, th) out[#out + 1] = string.format('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="%.1f"/>', a.x, a.y, b.x, b.y, css(col), th or 1) end,
   drawRect = function(a, b, col, round, _, th) out[#out + 1] = string.format('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" fill="none" stroke="%s" stroke-width="%.1f"/>', a.x, a.y, b.x - a.x, b.y - a.y, round or 0, css(col), th or 1) end,
   drawRectFilled = function(a, b, col, round) out[#out + 1] = string.format('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" fill="%s"/>', a.x, a.y, b.x - a.x, b.y - a.y, round or 0, css(col)) end,

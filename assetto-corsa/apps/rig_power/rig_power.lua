@@ -75,7 +75,7 @@ local GAME = {
   { 'DRS', 'DRS', 'DRS' }, { 'KERS', 'KERS', 'KERS' }, { '__EXT_FFB_RESET', '__EXT_FFB_RESET', 'FFB reset' },
 }
 
-local layout = { graphOnly = false, clusterLayout = 1, map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 }
+local layout = { graphOnly = false, clusterLayout = 1, mapWhole = false, map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 }
 for _, s in ipairs(SLOTS) do
   layout[s.id .. 'fn'], layout[s.id .. 'dev'], layout[s.id .. 'up'], layout[s.id .. 'dn'] = 0, '', s.up or -1, s.dn or -1
 end
@@ -903,6 +903,133 @@ local function graphClock(c, r, s)
   centred('power curve', small, c, r * 0.60, K.dimw)
 end
 
+-- Horsepower, torque and the power curve in one clock: the two figures at the top, thin arcs round the edge
+-- (horsepower red, torque white, a tick at the best seen), and the curve below them.
+local function powerGraphClock(c, r, s, hpTop, tqTop)
+  local st = stage()
+  local ring = st == 1 and K.ring or K.red
+  ui.drawCircleFilled(c, r, K.face, 48)
+  stroke(c, r - 5 * s, A0, A1, ring, 1.5 * s)
+  local function value(radius, thick, v, top, peakValue, color)
+    local f = math.max(0, math.min(1, v / top))
+    stroke(c, radius, A0, A1, K.off, thick)
+    if f > 0.005 then stroke(c, radius, A0, A0 + (A1 - A0) * f, color, thick) end
+    if peakValue > 0 then
+      local ap = A0 + (A1 - A0) * math.min(1, peakValue / top)
+      ui.drawLine(onArc(c, radius - thick - 1 * s, ap), onArc(c, radius + thick + 1 * s, ap), K.white, 1.5 * s)
+    end
+  end
+  value(r - 11 * s, 3 * s, now.hp, hpTop, peak.hp, K.red)
+  value(r - 17 * s, 2.5 * s, now.tq, tqTop, peak.tq, K.white)
+  local function figure(text, unit, y, size, unitColor)
+    local tiny = math.max(8, size * 0.5)
+    local wn, wu = ui.measureDWriteText(text, size).x, ui.measureDWriteText(unit, tiny).x
+    local x = c.x - (wn + 3 * s + wu) / 2
+    ui.dwriteDrawText(text, size, vec2(x, y), K.white)
+    ui.dwriteDrawText(unit, tiny, vec2(x + wn + 3 * s, y + (size - tiny) * 0.80), unitColor)
+  end
+  figure(thousands(now.hp), 'hp', c.y - r * 0.70, r * 0.24, K.red)
+  figure(thousands(now.tq), 'lb-ft', c.y - r * 0.44, r * 0.19, K.dimw)
+  local x0, x1, y0, y1 = c.x - r * 0.60, c.x + r * 0.60, c.y - r * 0.16, c.y + r * 0.36
+  local rpmMax = math.max(2000, now.limiter)
+  local top = niceTop(math.max(200, peak.hp, peak.tq))
+  local function X(rpm) return x0 + (x1 - x0) * math.min(1, rpm / rpmMax) end
+  local function Y(v) return y1 - (y1 - y0) * math.min(1, v / top) end
+  ui.drawLine(vec2(x0, y1), vec2(x1, y1), K.dimw, 1)
+  ui.drawLine(vec2(x0, y0), vec2(x1, y0), K.off, 1)
+  local keys = {}
+  for k, _ in pairs(bins) do keys[#keys + 1] = k end
+  table.sort(keys)
+  if #keys >= 2 then
+    ui.pathClear()
+    for i = 1, #keys do ui.pathLineTo(vec2(X(keys[i] * 100 + 50), Y(bins[keys[i]]))) end
+    ui.pathStroke(K.white, false, 1.5 * s)
+    ui.pathClear()
+    for i = 1, #keys do
+      local rpm = keys[i] * 100 + 50
+      ui.pathLineTo(vec2(X(rpm), Y(bins[keys[i]] / NM_TO_LBFT * rpm / 7121)))
+    end
+    ui.pathStroke(K.red, false, 2 * s)
+  end
+  ui.drawLine(vec2(X(now.rpm), y0), vec2(X(now.rpm), y1), K.dimw, 1)
+  ui.drawCircleFilled(vec2(X(now.rpm), Y(now.tq)), 3 * s, K.white, 12)
+  ui.drawCircleFilled(vec2(X(now.rpm), Y(now.hp)), 3.5 * s, K.red, 12)
+end
+
+-- The track in a clock. By default it is the road around the car, turned so that ahead is up and the car sits low
+-- in the clock with about 400 m of track in view ahead; a click switches to the whole circuit with the car on it.
+-- The shape comes from the track's racing-line data, so a track without one has no map.
+local TRACK = { tried = false, pts = nil, cx = 0, cz = 0, reach = 1 }
+local function loadTrack()
+  TRACK.tried = true
+  local ok, err = pcall(function()
+    if not ac.hasTrackSpline() then return end
+    local length = 0
+    pcall(function() length = num(ac.getSim().trackLengthM) end)
+    local n = math.max(240, math.min(900, math.floor(length / 10)))
+    local pts, minx, maxx, minz, maxz = {}, math.huge, -math.huge, math.huge, -math.huge
+    for i = 0, n - 1 do
+      local p = ac.trackProgressToWorldCoordinate(i / n)
+      pts[#pts + 1] = { p.x, p.z }
+      minx, maxx, minz, maxz = math.min(minx, p.x), math.max(maxx, p.x), math.min(minz, p.z), math.max(maxz, p.z)
+    end
+    if maxx - minx < 20 and maxz - minz < 20 then return end      -- no real line to draw
+    local cx, cz, reach = (minx + maxx) / 2, (minz + maxz) / 2, 1
+    for i = 1, #pts do reach = math.max(reach, math.sqrt((pts[i][1] - cx) ^ 2 + (pts[i][2] - cz) ^ 2)) end
+    TRACK.pts, TRACK.cx, TRACK.cz, TRACK.reach = pts, cx, cz, reach
+  end)
+  if not ok then ac.log('Boost and Power: no track map: ' .. tostring(err)) end
+end
+
+local function mapClock(c, r, s)
+  ui.drawCircleFilled(c, r, K.face, 48)
+  ui.drawCircle(c, r - 5 * s, stage() == 1 and K.ring or K.red, 48, 1.5 * s)
+  if not TRACK.tried then loadTrack() end
+  local car = ac.getCar(0)
+  if TRACK.pts == nil or car == nil then
+    centred('no map for this track', math.max(9, r * 0.11), c, -6 * s, K.dimw)
+    return
+  end
+  local pts, n = TRACK.pts, #TRACK.pts
+  local px, pz, hx, hz = 0, 0, 0, 1
+  pcall(function() px, pz, hx, hz = car.position.x, car.position.z, car.look.x, car.look.z end)
+  local hl = math.sqrt(hx * hx + hz * hz)
+  if hl < 0.01 then hx, hz, hl = 0, 1, 1 end
+  hx, hz = hx / hl, hz / hl
+  local inner = r - 12 * s
+  if store.mapWhole then                                   -- the whole circuit, the same way up as the game's own map
+    local scale = (inner - 8 * s) / TRACK.reach
+    local function P(x, z) return vec2(c.x + (x - TRACK.cx) * scale, c.y + (z - TRACK.cz) * scale) end
+    ui.pathClear()
+    for i = 1, n do ui.pathLineTo(P(pts[i][1], pts[i][2])) end
+    ui.pathStroke(K.white, true, 2 * s)
+    local a = P(pts[1][1], pts[1][2])
+    ui.drawCircleFilled(a, 2.5 * s, K.dimw, 8)                -- the start line
+    local p = P(px, pz)
+    ui.drawTriangleFilled(vec2(p.x + hx * 8 * s, p.y + hz * 8 * s), vec2(p.x - hx * 5 * s - hz * 5 * s, p.y - hz * 5 * s + hx * 5 * s),
+      vec2(p.x - hx * 5 * s + hz * 5 * s, p.y - hz * 5 * s - hx * 5 * s), K.red)
+  else                                                     -- the road around the car, ahead at the top
+    local scale = inner / 300
+    local home = vec2(c.x, c.y + inner * 0.45)
+    local function P(x, z)
+      local dx, dz = x - px, z - pz
+      return home.x + (dx * -hz + dz * hx) * scale, home.y - (dx * hx + dz * hz) * scale
+    end
+    local lastx, lasty = P(pts[n][1], pts[n][2])
+    local lastIn = (lastx - c.x) ^ 2 + (lasty - c.y) ^ 2 < inner * inner
+    for i = 1, n do
+      local x, y = P(pts[i][1], pts[i][2])
+      local isIn = (x - c.x) ^ 2 + (y - c.y) ^ 2 < inner * inner
+      if isIn and lastIn then ui.drawLine(vec2(lastx, lasty), vec2(x, y), K.white, 3 * s) end
+      lastx, lasty, lastIn = x, y, isIn
+    end
+    ui.drawTriangleFilled(vec2(home.x, home.y - 9 * s), vec2(home.x - 6 * s, home.y + 6 * s), vec2(home.x + 6 * s, home.y + 6 * s), K.red)
+  end
+  ui.setCursor(vec2(c.x - inner * 0.7, c.y - inner * 0.7))
+  if ui.invisibleButton('##clmapview', vec2(inner * 1.4, inner * 1.4)) then store.mapWhole = not store.mapWhole end
+  if ui.itemHovered() then ui.setTooltip('Click to switch between the road ahead and the whole circuit.') end
+end
+
 local function pill(id, c, w, hgt, text, color, onClick)   -- a small outlined light; a click works the switch
   ui.drawRect(vec2(c.x - w / 2, c.y - hgt / 2), vec2(c.x + w / 2, c.y + hgt / 2), color, hgt / 2, nil, 1.5)
   local size = hgt * 0.62
@@ -962,7 +1089,7 @@ local function revCounter(c, r, s)
   local gs = rc * 0.78
   centred(gearText, gs, c, -gs * 0.82, K.white)
   centred(thousands(math.floor(now.rpm / 10 + 0.5) * 10), 15 * s, c, gs * 0.20, zone)
-  if store.clusterLayout == 2 then
+  if store.clusterLayout >= 2 then
     local speed, big, tiny = string.format('%.0f', now.mph), 19 * s, 8 * s      -- the figure, with its unit kept very small
     local wn, wu = ui.measureDWriteText(speed, big).x, ui.measureDWriteText('mph', tiny).x
     local x, y = c.x - (wn + 3 * s + wu) / 2, c.y + gs * 0.20 + 17 * s
@@ -972,7 +1099,7 @@ local function revCounter(c, r, s)
     centred(string.format('%.1f psi', psi), 12 * s, c, gs * 0.20 + 19 * s, K.teal)
   end
   ui.setCursor(vec2(c.x - gs * 0.4, c.y - gs * 0.75))
-  if ui.invisibleButton('##cllayout', vec2(gs * 0.8, gs * 0.85)) then store.clusterLayout = store.clusterLayout == 2 and 1 or 2 end
+  if ui.invisibleButton('##cllayout', vec2(gs * 0.8, gs * 0.85)) then store.clusterLayout = clampIndex(store.clusterLayout, 3) % 3 + 1 end
   -- the needle, over the face only
   local an = A0 + (A1 - A0) * frac
   ui.drawLine(onArc(c, rc + 2 * s, an), onArc(c, r - 2 * s, an), st == 3 and K.white or K.red, 4 * s)
@@ -1033,9 +1160,12 @@ end
 -- The cluster's settings (the cog on its title bar): which arrangement of the clocks to show.
 function windowClusterSettings(dt)
   ui.text('Arrangement')
-  if ui.radioButton('Speed on the left, boost in the rev counter', store.clusterLayout ~= 2) then store.clusterLayout = 1 end
-  if ui.radioButton('Speed in the rev counter, boost on the left', store.clusterLayout == 2) then store.clusterLayout = 2 end
-  ui.text('Clicking the gear figure in the rev counter also switches between them.')
+  local now3 = clampIndex(store.clusterLayout, 3)
+  if ui.radioButton('Speed on the left, boost in the rev counter', now3 == 1) then store.clusterLayout = 1 end
+  if ui.radioButton('Speed in the rev counter, boost on the left', now3 == 2) then store.clusterLayout = 2 end
+  if ui.radioButton('Track map beside the rev counter, all the power in one clock', now3 == 3) then store.clusterLayout = 3 end
+  ui.text('Clicking the gear figure in the rev counter also steps through them.')
+  ui.text('Clicking the track map switches between the road ahead and the whole circuit.')
 end
 
 function windowCluster(dt)
@@ -1048,21 +1178,27 @@ function windowCluster(dt)
   local hpTop = niceTop(math.max(400, peak.hp))
   local tqTop = niceTop(math.max(400, peak.tq))
   local mphTop = now.mph > 200 and 300 or 200
-  if store.clusterLayout == 2 then                         -- boost takes the left clock, speed moves into the rev counter
+  local arrangement = clampIndex(store.clusterLayout, 3)
+  if arrangement >= 2 then                                 -- boost takes the left clock, speed moves into the rev counter
     local peakPsi = peak.boost * BAR_TO_PSI
     clock(at(76, 180), 76 * s, s, now.boost * BAR_TO_PSI, math.max(15, math.ceil((peakPsi + 1) / 10) * 10), 'psi', peakPsi)
   else
     clock(at(76, 180), 76 * s, s, now.mph, mphTop, 'mph', nil)
   end
   gForce(at(904, 180), 76 * s, s, dt)
-  powerClock(at(250, 168), 96 * s, s, hpTop, tqTop)
+  if arrangement == 3 then                                 -- the track takes the clock on the left, power moves right
+    mapClock(at(250, 168), 96 * s, s)
+    powerGraphClock(at(730, 168), 96 * s, s, hpTop, tqTop)
+  else
+    powerClock(at(250, 168), 96 * s, s, hpTop, tqTop)
+    graphClock(at(730, 168), 96 * s, s)
+  end
   if cfg ~= nil then                                       -- three unlabelled lights; a click works each switch
     local m = clampIndex(store.map, #cfg.maps)
-    local pm, ps = at(250, 168), at(76, 180)
+    local pm, ps = at(arrangement == 3 and 730 or 250, 168), at(76, 180)
     pill('##clmap', vec2(pm.x, pm.y + 96 * s * 0.58), 60 * s, 16 * s, cfg.maps[m].name, m > 1 and K.red or K.white, flipMap)
     pill('##clsound', vec2(ps.x, ps.y + 76 * s * 0.62), 84 * s, 16 * s, cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name, K.white, cycleSound)
   end
-  graphClock(at(730, 168), 96 * s, s)
   revCounter(at(490, 150), 136 * s, s)
 end
 

@@ -15,6 +15,8 @@ Assetto Corsa runs under CrossOver; everything that talks to the hardware runs n
 
 ![The in-game cluster: speed, horsepower with torque, rev counter with boost and gear, the power curve, and g-force](docs/images/cluster.png)
 
+![The cluster's third arrangement: boost, the road ahead, rev counter with speed, all the power in one clock, g-force](docs/images/cluster-track-map.png)
+
 The in-game cluster, drawn off-game from the app's own code by [`tools/render_app.lua`](tools/render_app.lua). Its face goes from
 white to black-with-red-ticks to solid red as the revs approach the limit.
 
