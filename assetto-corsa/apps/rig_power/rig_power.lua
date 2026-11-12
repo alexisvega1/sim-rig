@@ -154,16 +154,16 @@ local function applySound()
   end
   -- A sound recorded for fewer revs than this engine turns is fed scaled revs, so it tops out at the limiter
   -- instead of running off the end of its recording. Sounds that reach the limiter by themselves are left alone.
-  -- The pitch is raised by the same factor (up to 30%), so the note still climbs with the real revs.
+  -- The pitch is raised by the same factor (up to 40%), so the note still climbs with the real revs.
   local top = num(s.top)
   local squeeze = top > 0 and now.limiter > top + 50
   soundLimiter = now.limiter
   if squeeze or squeezed then
     local out = squeeze and top or 30000
     local inp = squeeze and now.limiter or 30000
-    local pitch = squeeze and math.min(1.3, now.limiter / top) or 1
+    local pitch = squeeze and math.min(1.4, now.limiter / top) or 1
     local ok, err = pcall(function()
-      local lut = ac.Lut(string.format('0 | 0\n%d | %d\n60000 | %d', inp, out, squeeze and out or 60000), {})   -- the second argument is required
+      local lut = ac.DataLUT11.parse(string.format('(|0=0|%d=%d|60000=%d|)', inp, out, squeeze and out or 60000))
       ac.CarAudioTweak.setParameterTransform(E.EngineExt, 'rpms', lut)
       ac.CarAudioTweak.setParameterTransform(E.EngineInt, 'rpms', lut)
       ac.CarAudioTweak.setPitch(E.EngineExt, pitch)
