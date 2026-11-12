@@ -227,7 +227,7 @@ function showTab(name){
   if (name === "laps") drawLaps();
   if (name === "track") drawTrack();
   if (name === "overlay") drawOverlay();
-  try { localStorage.setItem("rig_tab", name); } catch (e) {}
+  try { localStorage.setItem("rig_tab", name); history.replaceState(null, "", "#" + name); } catch (e) {}
 }
 for (const b of document.querySelectorAll("nav button")) b.addEventListener("click", () => showTab(b.dataset.tab));
 
@@ -508,11 +508,11 @@ function buildLaps(){
   const tc = h("div", {class:"card"}, h("h2", {}, "Every lap"), h("p", {class:"sub"}, `${carName(sel.car)}, newest first.`));
   tc.append(h("div", {class:"scroll"}, h("table", {},
     h("thead", {}, h("tr", {}, h("th", {}, "Session"), h("th", {class:"r"}, "Lap"), h("th", {class:"r"}, "Time"),
-      Array.from({length:nSec}, (_, i) => h("th", {class:"r"}, `S${i + 1}`)), h("th", {class:"r"}, "To best"), h("th", {}, ""))),
+      Array.from({length:nSec}, (_, i) => h("th", {class:"r"}, `S${i + 1}`)), h("th", {class:"r"}, "To best"), h("th", {}, "Tyres"), h("th", {}, ""))),
     h("tbody", {}, [...laps].reverse().map(l => h("tr", {},
       h("td", {}, fmtDateLong(l.date)), h("td", {class:"r"}, String(l.n)), h("td", {class:"r"}, fmtLap(l.ms)),
       Array.from({length:nSec}, (_, i) => h("td", {class:"r"}, l.sectors[i] != null ? fmtSec(l.sectors[i]) : "")),
-      h("td", {class:"r"}, l === best ? "best" : `+${fmtSec(l.ms - best.ms)}`),
+      h("td", {class:"r"}, l === best ? "best" : `+${fmtSec(l.ms - best.ms)}`), h("td", {}, l.tyre || ""),
       h("td", {}, l.cuts ? `${l.cuts} cut${l.cuts === 1 ? "" : "s"}` : "")))))));
   root.append(tc);
 }
@@ -646,7 +646,7 @@ function renderTrack(){
   const tracks = [...new Map(rec.laps.map(l => [l.track, l.trackName])).entries()];
   const cars = [...new Map(rec.laps.filter(l => l.track === trk.track).map(l => [l.car, l.carName])).entries()];
   const newest = [...a.laps].reverse();
-  const label = l => `${fmtDateLong(l.date)} · ${fmtLap(l.ms)}${l.id === a.best.id ? " · best" : ""}${l.cuts ? " · cut" : ""}`;
+  const label = l => `${fmtDateLong(l.date)} · ${fmtLap(l.ms)}${l.id === a.best.id ? " · best" : ""}${l.tyre ? ` · ${l.tyre}` : ""}${l.cuts ? " · cut" : ""}`;
   const pickSel = (cur, on) => h("select", {onchange: e => on(e.target.value)},
     newest.map(l => h("option", {value:l.id, selected: l.id === cur}, label(l))));
   const setMode = v => { trk.mode = v; try { localStorage.setItem("rig_mapmode", v); } catch (e) {} renderTrack(); };
@@ -906,6 +906,7 @@ function renderOverlay(){
   root.replaceChildren();
   const tracks = [...new Map(rec.laps.map(l => [l.track, l.trackName])).entries()];
   const cars = [...new Map(rec.laps.filter(l => l.track === ovs.track).map(l => [l.car, l.carName])).entries()];
+  const tyres = [...new Set(a.laps.map(l => l.tyre).filter(Boolean))];        // known once a lap's session has ended
   root.append(h("div", {class:"filters"},
     h("label", {}, "Track", h("select", {onchange: e => { ovs.track = e.target.value; ovs.car = null; drawOverlay(); }},
       tracks.map(([id, n]) => h("option", {value:id, selected:id === ovs.track}, n)))),
@@ -918,13 +919,14 @@ function renderOverlay(){
         try { localStorage.setItem("rig_units", trk.mph ? "mph" : "kmh"); } catch (er) {} renderOverlay(); }},
       h("option", {value:"mph", selected: trk.mph}, "mph"), h("option", {value:"kmh", selected: !trk.mph}, "km/h"))),
     h("div", {class:"small", style:"margin-left:auto; padding-bottom:6px"},
-      `${a.count} of your ${a.total} laps shown` + (a.left_out ? ` · ${a.left_out} left out for being more than 7% off the best` : ""))));
+      `${a.count} of your ${a.total} laps shown` + (a.left_out ? ` · ${a.left_out} left out for being more than 7% off the best` : "")
+        + (tyres.length ? ` · tyres: ${tyres.join(", ")}` : ""))));
 
   const gain = a.corners.length ? a.corners.reduce((p, c) => c.mean_lost_ms > p.mean_lost_ms ? c : p) : null;
   const loose = a.corners.length ? a.corners.reduce((p, c) => c.sd_ms > p.sd_ms ? c : p) : null;
   const tile = (k, v, n) => h("div", {class:"tile"}, h("div", {class:"k"}, k), h("div", {class:"v"}, v), h("div", {class:"n"}, n));
   root.append(h("div", {class:"tiles"},
-    tile("Best of these", fmtLap(a.best.ms), fmtDateLong(a.best.date)),
+    tile("Best of these", fmtLap(a.best.ms), fmtDateLong(a.best.date) + ((a.laps.find(l => l.id === a.best.id) || {}).tyre ? ` · ${a.laps.find(l => l.id === a.best.id).tyre} tyres` : "")),
     tile("Average lap", fmtLap(a.mean_ms), `${fmtSec(a.mean_ms - a.best.ms)} s off the best`),
     tile("Lap to lap", `±${(a.sd_ms / 1000).toFixed(2)} s`, `Slowest shown ${fmtLap(a.worst_ms)}`),
     gain ? tile("Most to gain", `Turn ${gain.n}`, `${fmtSec(gain.mean_lost_ms)} s a lap on average against your quickest pass`) : null,
@@ -981,7 +983,8 @@ function renderOverlay(){
       h("p", {class:"sub"}, "Seconds lost in each corner against the quickest pass among these laps. A column that is dark all the way down is a corner to work on; one dark cell is a mistake."),
       h("div", {class:"scroll", style:"max-height:none; overflow-x:auto"}, h("table", {class:"heat"},
         h("thead", {}, h("tr", {}, h("th", {}, "Lap"), a.corners.map(c => h("th", {}, `T${c.n}`)))),
-        h("tbody", {}, rows.map(l => h("tr", {}, h("td", {}, fmtLap(l.ms), h("span", {class:"tag"}, (l.id === a.best.id ? "best · " : "") + new Date(l.date).toLocaleString(undefined, {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}))),
+        h("tbody", {}, rows.map(l => h("tr", {}, h("td", {}, fmtLap(l.ms), h("span", {class:"tag"}, (l.id === a.best.id ? "best · " : "") + new Date(l.date).toLocaleString(undefined, {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})
+              + (l.tyre ? ` · ${l.tyre}` : ""))),
             l.lost_ms.map(ms => h("td", {class:"c", style:shade(ms), title: ms ? `${fmtSec(ms)} s slower than the quickest pass` : "The quickest pass of these laps"}, ms ? `+${(ms / 1000).toFixed(2)}` : "best")))),
           h("tr", {class:"foot"}, h("td", {}, "Average"), a.corners.map(c => h("td", {}, `+${(c.mean_lost_ms / 1000).toFixed(2)}`))),
           h("tr", {class:"foot"}, h("td", {}, "Varies by"), a.corners.map(c => h("td", {}, `±${(c.sd_ms / 1000).toFixed(2)}`))))))));
@@ -1119,7 +1122,7 @@ function chips(){
     chip(onTrack, "Game", onTrack ? carName(d.car) : "no session"),
     chip(!!d, "Wheel screen and lights", d ? "running" : "not running"),
     chip(!!hp, "Pedal haptics", hp ? (hp.game ? "playing" : "ready") : "not running"),
-    chip(recOn, "Lap recorder", recOn ? (r.whole ? "recording this lap" : "waiting for the line") : "idle"));
+    chip(!!r, "Lap recorder", recOn ? (r.whole ? "recording this lap" : "waiting for the line") : r ? "ready, waiting for a session" : "not running"));
 }
 async function poll(){
   try {
@@ -1138,6 +1141,8 @@ async function poll(){
   if (st.dash && st.dash.car) carNames[st.dash.car] = st.dash.carName || st.dash.car;
   chips(); buildHaptics(); buildLights();
   let tab = "haptics"; try { tab = localStorage.getItem("rig_tab") || tab; } catch (e) {}
+  const asked = location.hash.slice(1);                                  // the launcher opens the page at #overlay
+  if (TABS.includes(asked)) tab = asked;
   showTab(TABS.includes(tab) ? tab : "haptics");
   setInterval(poll, 500);
   setInterval(liveLights, 100);

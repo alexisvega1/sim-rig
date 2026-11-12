@@ -58,6 +58,29 @@ def ui_name(kind: str, ident: str) -> str:
     return _names[key]
 
 
+_tyres: dict[str, dict[str, str]] = {}
+
+
+def tyre_name(car: str, short: str | None) -> str | None:
+    """The compound's full name for the short code a saved lap carries ("S" -> "Slick"), read from the
+    car's own tyres.ini. Cars whose data is packed keep the code."""
+    if not short:
+        return None
+    if car not in _tyres:
+        names = {}
+        try:
+            text = (AC_ROOT / "content/cars" / car / "data/tyres.ini").read_text(encoding="utf-8", errors="replace")
+            for body in re.findall(r"^\[FRONT(?:_\d+)?\]([^\[]*)", text, re.M):
+                n, s = re.search(r"^NAME\s*=\s*([^;\r\n]*)", body, re.M), re.search(r"^SHORT_NAME\s*=\s*([^;\r\n]*)", body, re.M)
+                if n and s:
+                    names[s.group(1).strip()] = n.group(1).strip()
+        except OSError:
+            pass
+        _tyres[car] = names
+    name = _tyres[car].get(short, short)
+    return name.title() if name.isupper() and len(name) > 3 else name
+
+
 def laps() -> dict:
     """Every lap Content Manager has saved, oldest session first."""
     global _laps_cache
@@ -79,7 +102,7 @@ def laps() -> dict:
                 if lap.get("car", 0) != 0 or not isinstance(lap.get("time"), (int, float)):
                     continue                                  # car 0 is the player
                 rows.append({"ms": int(lap["time"]), "sectors": [int(x) for x in lap.get("sectors") or []],
-                             "cuts": int(lap.get("cuts") or 0)})
+                             "cuts": int(lap.get("cuts") or 0), "tyre": tyre_name(car, lap.get("tyre"))})
         if rows and m:
             y, mo, da, h, mi, se = m.groups()
             sessions.append({"id": f.stem, "date": f"20{y}-{mo}-{da}T{h}:{mi}:{se}",
@@ -111,14 +134,15 @@ def track_report(query: dict) -> dict | None:
     a = lapsan.analysis(one("track") or "", one("car") or "", one("lap"), one("ref"), mph=one("units") == "mph")
     if a:
         a["carName"], a["trackName"] = ui_name("car", a["lap"]["car"]), ui_name("track", a["lap"]["track"])
-        cuts = {}                                              # Content Manager knows which laps had cuts
-        for s in laps()["sessions"]:
-            if s["car"] == a["lap"]["car"] and s["track"] == a["lap"]["track"]:
-                for lap in s["laps"]:
-                    cuts[lap["ms"]] = lap["cuts"]
+        known = _session_facts(a["lap"]["car"], a["lap"]["track"])   # Content Manager knows which laps had cuts, and the tyres
         for m in a["laps"]:
-            m["cuts"] = cuts.get(m["ms"])
+            m["cuts"], m["tyre"] = known.get(m["ms"], (None, None))
     return a
+
+
+def _session_facts(car: str, track: str) -> dict:
+    """Cuts and tyre compound for each saved lap of this car here, by lap time. A lap only appears once its session has ended."""
+    return {lap["ms"]: (lap["cuts"], lap["tyre"]) for s in laps()["sessions"] if s["car"] == car and s["track"] == track for lap in s["laps"]}
 
 
 def overlay_report(query: dict) -> dict | None:
@@ -130,6 +154,9 @@ def overlay_report(query: dict) -> dict | None:
     a = lapsan.overlay(one("track") or "", one("car") or "", limit, clean=one("all") != "1")
     if a:
         a["carName"], a["trackName"] = ui_name("car", a["car"]), ui_name("track", a["track"])
+        known = _session_facts(a["car"], a["track"])
+        for m in a["laps"]:
+            m["cuts"], m["tyre"] = known.get(m["ms"], (None, None))
     return a
 
 
