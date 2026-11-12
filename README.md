@@ -10,6 +10,7 @@ Assetto Corsa runs under CrossOver; everything that talks to the hardware runs n
 | [`assetto-corsa/apps/rig_power/`](assetto-corsa/apps/rig_power) | An in-game app (Custom Shaders Patch, Lua): boost dial, live horsepower and torque, the power curve the car really makes, and on some cars a boost-map switch and an engine-sound switch. |
 | [`assetto-corsa/gt2rs-2000/`](assetto-corsa/gt2rs-2000) | A script that turns a 911 GT2 RS mod into a track build, with the lap times at each step. |
 | [`macan-s/`](macan-s) | A script that builds three 2021 Macan S cars (stock, Stage 2, 1,000 hp) from the official Macan Turbo. |
+| [`results/`](results) | The lap log: every lap time and sector from every session, with charts for the Ferrari F2004 and the Nordschleife. |
 | [`laps/`](laps) | Every lap the recorder has saved: speed, pedals, position and per-wheel data on 2,000 steps round the track. |
 
 ## Doing this yourself

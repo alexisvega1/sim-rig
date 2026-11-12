@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11">
+<title>Porsche Carrera GT at Nordschleife</title>
+<text x="62" y="16" fill="#8b949e" font-size="12">Porsche Carrera GT at Nordschleife: every lap in the order driven</text>
+<line x1="62" x2="744" y1="216.0" y2="216.0" stroke="#8b949e" stroke-opacity="0.25"/>
+<text x="56" y="220.0" fill="#8b949e" text-anchor="end">8:16.1</text>
+<line x1="62" x2="744" y1="169.5" y2="169.5" stroke="#8b949e" stroke-opacity="0.25"/>
+<text x="56" y="173.5" fill="#8b949e" text-anchor="end">8:29.6</text>
+<line x1="62" x2="744" y1="123.0" y2="123.0" stroke="#8b949e" stroke-opacity="0.25"/>
+<text x="56" y="127.0" fill="#8b949e" text-anchor="end">8:43.1</text>
+<line x1="62" x2="744" y1="76.5" y2="76.5" stroke="#8b949e" stroke-opacity="0.25"/>
+<text x="56" y="80.5" fill="#8b949e" text-anchor="end">8:56.6</text>
+<line x1="62" x2="744" y1="30.0" y2="30.0" stroke="#8b949e" stroke-opacity="0.25"/>
+<text x="56" y="34.0" fill="#8b949e" text-anchor="end">9:10.1</text>
+<text x="172.7" y="230" fill="#8b949e">Sep 13</text>
+<line x1="62" x2="744" y1="202.2" y2="202.2" stroke="#d95926" stroke-dasharray="4 3"/>
+<text x="744" y="216.2" fill="#d95926" text-anchor="end">best 8:20.131</text>
+<polyline points="175.7,30.0 403.0,202.2 630.3,146.9" fill="none" stroke="#3987e5" stroke-opacity="0.45" stroke-width="1.5"/>
+<path d="M171.7,37 L179.7,37 L175.7,30 Z" fill="#8b949e"><title>2026-09-13 lap 1: 9:10.858</title></path>
+<circle cx="403.0" cy="202.2" r="5" fill="#d95926"><title>2026-09-13 lap 2: 8:20.131</title></circle>
+<circle cx="630.3" cy="146.9" r="3.5" fill="#3987e5"><title>2026-09-13 lap 3: 8:36.192</title></circle>
+<text x="62" y="246" fill="#8b949e">filled: clean lap    ring: lap with a cut    triangle: more than 10% off the best</text>
+</svg>

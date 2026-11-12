@@ -29,4 +29,7 @@ if [ -d "$HOME/dev/macan-s" ]; then
   rsync -a "$HOME/dev/macan-s/build.py" "$HOME/dev/macan-s/acd_unpack.py" "$HERE/macan-s/"
 fi
 
+# lap log from Content Manager's saved sessions (times only: the session files themselves stay behind)
+python3 "$HERE/tools/session_report.py" || true
+
 cd "$HERE" && git status --short
