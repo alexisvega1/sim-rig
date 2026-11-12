@@ -11,6 +11,7 @@ Assetto Corsa runs under CrossOver; everything that talks to the hardware runs n
 | [`assetto-corsa/gt2rs-2000/`](assetto-corsa/gt2rs-2000) | A script that turns a 911 GT2 RS mod into a track build, with the lap times at each step. |
 | [`macan-s/`](macan-s) | A script that builds three 2021 Macan S cars (stock, Stage 2, 1,000 hp) from the official Macan Turbo. |
 | [`results/`](results) | The lap log: every lap time and sector from every session, with charts for the Ferrari F2004 and the Nordschleife. |
+| [`tools/`](tools) | Small helpers: the lap-log generator, an off-game renderer for the in-game app, and `acreplay.py`, which reads the car's position, revs, gear and pedals out of one of the game's replay files (used to analyse runs that ended in a crash, which the lap recorder does not keep). |
 | [`laps/`](laps) | Every lap the recorder has saved: speed, pedals, position and per-wheel data on 2,000 steps round the track. |
 
 ![The in-game cluster: speed, horsepower with torque, rev counter with boost and gear, the power curve, and g-force](docs/images/cluster.png)
