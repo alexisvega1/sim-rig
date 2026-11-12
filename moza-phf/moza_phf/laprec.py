@@ -190,6 +190,7 @@ class Recorder(threading.Thread):
                         rigcfg.write_state("recorder", {"connected": True, "car": car, "track": track,
                                                         "saved": self.saved, "whole": b.whole})
             except (OSError, struct.error):
+                rigcfg.write_state("recorder", {"connected": False, "saved": self.saved})   # alive, waiting for a session
                 time.sleep(2.0)                                                    # no game: try again shortly
             finally:
                 try:
