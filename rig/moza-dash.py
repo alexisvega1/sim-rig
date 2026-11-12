@@ -341,6 +341,11 @@ def main():
             # taking the peak stops the LED strip from jumping around.
             if a.max_rpm <= 0 and s is not None and st['extra_seq'] != seq_at_connect and st.get('limiter', 0) > 1000 and st['limiter'] > st['maxrpm'] + 1:
                 st['maxrpm'] = st['limiter']; print(f"maxrpm from car limiter: {st['maxrpm']:.0f}", flush=True)
+            # ...and follow it back down once a lower value has held steady for 3 s (a car with a switchable rev limit)
+            lim = st.get('limiter', 0)
+            if lim != st.get('lim_seen'): st['lim_seen'], st['lim_since'] = lim, now
+            if a.max_rpm <= 0 and s is not None and st['extra_seq'] != seq_at_connect and 1000 < lim < st['maxrpm'] - 1 and now - st.get('lim_since', now) > 3 and st['rpm'] <= lim + 200:
+                st['maxrpm'] = lim; print(f"maxrpm down to car limiter: {lim:.0f}", flush=True)
             # tier-def blind retransmit + END change re-emit
             if retx_times and now >= retx_times[0]:
                 retx_times.pop(0)
