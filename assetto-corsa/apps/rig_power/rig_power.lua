@@ -199,8 +199,10 @@ local function applySound()
   -- instead of running off the end of its recording. Sounds that reach the limiter by themselves are left alone.
   -- The pitch is raised by the same factor (up to 40%), so the note still climbs with the real revs.
   -- The scaled revs are written to the sound every frame, in script.update (the patch's remap-table call is broken).
+  -- Only on the high rev limit: at the car's normal limit every sound is left exactly as it was recorded.
   local top = num(s.top)
-  local squeeze = top > 0 and now.limiter > top + 50
+  local normal = cfg.revs and cfg.revs[1].rpm or now.limiter
+  local squeeze = top > 0 and now.limiter > top + 50 and now.limiter > normal + 50
   soundLimiter = now.limiter
   if squeeze or squeezed then
     local pitch = squeeze and math.min(1.4, now.limiter / top) or 1
