@@ -12,20 +12,21 @@ local ROOT = ac.getFolder(ac.FolderID.Root)
 local OUT = ROOT .. '/rig_power_telem.txt'
 
 -- Cars with switches. A map's level is the share of the car's highest boost setting
--- (engine.ini WASTEGATE) the turbos are allowed to reach. A sound names the installed
--- car whose engine sounds to borrow; turbo = true also borrows its turbo whistle.
+-- (engine.ini WASTEGATE) the turbos are allowed to reach; the game keeps it in steps of 0.1.
+-- A sound names the installed car whose engine sounds to borrow; turbo = true also borrows
+-- its turbo whistle; top is the highest revs that sound was recorded for.
 local CARS = {
   porsche_911_gt2_rs_wss_2000 = {
     maps = {
-      { name = '2,000', level = 0.76 },
-      { name = '2,500', level = 1.00 },
+      { name = '2,000', level = 0.60 },
+      { name = '2,500', level = 0.80 },
     },
     sounds = {
-      { name = '935 TURBO', car = 'ks_porsche_935_78_moby_dick', turbo = true },
-      { name = '911 RSR', car = 'ks_porsche_911_rsr_2017', turbo = false },
-      { name = 'GT1 TURBO', car = 'ks_porsche_911_gt1', turbo = true },
-      { name = '917/30', car = 'ks_porsche_917_30', turbo = true },
-      { name = 'STOCK' },
+      { name = '935 TURBO', car = 'ks_porsche_935_78_moby_dick', turbo = true, top = 9300 },
+      { name = '911 RSR', car = 'ks_porsche_911_rsr_2017', turbo = false, top = 9000 },
+      { name = 'GT1 TURBO', car = 'ks_porsche_911_gt1', turbo = true, top = 8000 },
+      { name = '917/30', car = 'ks_porsche_917_30', turbo = true, top = 8500 },
+      { name = 'STOCK', top = 7200 },
     },
   },
 }
@@ -46,7 +47,8 @@ local started, startWait = false, 0
 local mapTouched = false     -- the map has been set from here (until then the car's own default applies)
 local mapTimer = 0
 local banks = {}             -- [car] = true once its sound file is loaded
-local status = { sound = '', bank = 1, err = '' }
+local status = { sound = '', bank = 1, err = '', note = '' }
+local squeezed = false       -- the engine sound's revs are being scaled down to fit the borrowed sound
 local binding, bindTimer, bindSkip = nil, 0, {}
 local held = { map = false, sound = false }
 
@@ -124,6 +126,22 @@ local function applySound()
       ac.CarAudioTweak.setVolume(swaps[i][1], swaps[i][3])
     end)
     if not ok then fail('sound', err) end
+  end
+  -- A sound recorded for fewer revs than this engine turns is fed scaled revs, so it tops out at the limiter
+  -- instead of running off the end of its recording. Sounds that reach the limiter by themselves are left alone.
+  local top = num(s.top)
+  local squeeze = top > 0 and now.limiter > top + 50
+  if squeeze or squeezed then
+    local out = squeeze and top or 30000
+    local inp = squeeze and now.limiter or 30000
+    local ok, err = pcall(function()
+      local lut = ac.Lut(string.format('0 | 0\n%d | %d\n30000 | %d', inp, out, out))
+      ac.CarAudioTweak.setParameterTransform(E.EngineExt, 'rpms', lut)
+      ac.CarAudioTweak.setParameterTransform(E.EngineInt, 'rpms', lut)
+    end)
+    squeezed = squeeze and ok
+    status.note = ok and (squeeze and ('revs scaled to ' .. top) or '') or ('rev scaling failed: ' .. tostring(err))
+    if not ok then ac.log('Boost and Power: ' .. status.note) end
   end
   status.sound = s.name
   ac.log('Boost and Power: sound ' .. s.name)
@@ -240,7 +258,7 @@ local function start(dt)                                -- once the car and the 
   if cfg == nil then return end
   store.map = clampIndex(store.map, #cfg.maps)
   store.sound = clampIndex(store.sound, #cfg.sounds)
-  if store.map ~= 1 then applyMap() end                 -- map 1 is what the car starts on by itself
+  applyMap()
   applySound()
 end
 
@@ -268,10 +286,10 @@ function script.update(dt)
     local m = cfg.maps[clampIndex(store.map, #cfg.maps)]
     mapName, level = (m.name:gsub(',', '')), m.level
   end
-  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s',
+  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s',
     seq, now.rpm, now.gas, now.boost, now.tq, now.hp,
     num(car.drivetrainTorque), num(car.drivetrainPower), num(car.turboCount),
-    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' '))), true)
+    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' '))), true)
 end
 
 -- drawing helpers ------------------------------------------------------------
