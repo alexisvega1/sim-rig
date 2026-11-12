@@ -1,8 +1,8 @@
 -- Run the in-game app with stand-in game functions whose drawing calls write an SVG, to look at a window off-game.
 -- Run it from this folder (it reads track_pts.lua, one recorded lap's line, for the track map):
 --   lua -e "W=980 H=300 RPM=8200 LAYOUT=3" render_app.lua ../assetto-corsa/apps/rig_power/rig_power.lua windowCluster out.svg
--- GRAPH=true shows the gauge in its graph-only mode; LAYOUT picks the cluster arrangement; WHOLE=true the whole-circuit map.
--- Text widths are estimated, so spacing is close to the game's but not exact.
+-- GRAPH=true shows the gauge in its graph-only mode; LAYOUT picks the cluster arrangement; WHOLE=true the whole-circuit map;
+-- GX and GZ set the g-force reading. Text widths are estimated, so spacing is close to the game's but not exact.
 local out = {}
 local function css(c) return string.format('rgba(%d,%d,%d,%.2f)', math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5), c[4] or 1) end
 vec2 = function(x, y) return { x = x, y = y } end
@@ -49,7 +49,7 @@ car.turboBoost = 4.71
 car.rpm = RPM or 10400
 for i = 1, 3 do script.update(0.1) end
 out = {}
-for i = 1, 30 do out = {}; car.acceleration.x = 1.6 - i * 0.02; car.acceleration.z = -1.9 + i * 0.03; script.update(0.03); _G[arg[2]](0.03) end
+for i = 1, 30 do out = {}; car.acceleration.x = GX or (1.6 - i * 0.02); car.acceleration.z = GZ or (-1.9 + i * 0.03); script.update(0.03); _G[arg[2]](0.03) end
 local f = io.open(arg[3], 'w')
 f:write(string.format('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d"><rect width="%d" height="%d" fill="#6c7f86"/><rect y="%d" width="%d" height="%d" fill="#3c4347"/>', W, H, W, H, math.floor(H * 0.55), W, math.floor(H * 0.45)))
 f:write(table.concat(out, '\n')); f:write('</svg>'); f:close()
