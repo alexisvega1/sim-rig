@@ -12,6 +12,12 @@ Assetto Corsa runs under CrossOver; everything that talks to the hardware runs n
 | [`macan-s/`](macan-s) | A script that builds three 2021 Macan S cars (stock, Stage 2, 1,000 hp) from the official Macan Turbo. |
 | [`laps/`](laps) | Every lap the recorder has saved: speed, pedals, position and per-wheel data on 2,000 steps round the track. |
 
+## Doing this yourself
+
+[`docs/SETUP.md`](docs/SETUP.md) is the whole path on a Mac: Assetto Corsa in CrossOver, force feedback through
+Torqer, the wheel's lights and screen, pedal haptics, and getting the No Hesi launcher to run, with the settings
+and registry values that made each one work.
+
 ## Running it
 
 The rig runs from `~/dev/moza-phf` and `~/dev/moza-rig`, not from this folder. `rig/start-rig.sh` finds the
