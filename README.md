@@ -13,7 +13,7 @@ Assetto Corsa runs under CrossOver; everything that talks to the hardware runs n
 | [`results/`](results) | The lap log: every lap time and sector from every session, with charts for the Ferrari F2004 and the Nordschleife. |
 | [`laps/`](laps) | Every lap the recorder has saved: speed, pedals, position and per-wheel data on 2,000 steps round the track. |
 
-![The in-game cluster: speed, horsepower, rev counter with boost and gear, torque, and the sound and rev-limit lights](docs/images/cluster.png)
+![The in-game cluster: speed, horsepower with torque, rev counter with boost and gear, the power curve, and the sound and rev-limit lights](docs/images/cluster.png)
 
 The in-game cluster, drawn off-game from the app's own code by [`tools/render_app.lua`](tools/render_app.lua). Its face goes from
 white to black-with-red-ticks to solid red as the revs approach the limit.

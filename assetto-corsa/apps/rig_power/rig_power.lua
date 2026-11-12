@@ -772,9 +772,9 @@ function windowWheel(dt)
 end
 
 -- the Cluster window ----------------------------------------------------------
--- Five round clocks in a row, the way a sports car's instrument cluster is laid out: speed, horsepower, a large
--- rev counter in the middle, torque, and a small one for the map, rev limit and sound. Only the clocks are drawn,
--- so the track shows between and around them.
+-- Five round clocks in a row, the way a sports car's instrument cluster is laid out: speed, horsepower with torque,
+-- a large rev counter in the middle, the power curve, and a small one for the sound and rev limit. Only the clocks
+-- are drawn, so the track shows between and around them.
 local K = {
   face = hex('07090B', 0.74), ring = hex('F4F7FA', 0.9), white = hex('F4F7FA'), ink = hex('0B0E11'), dimw = hex('F4F7FA', 0.55),
   off = hex('F4F7FA', 0.13), red = hex('E0312E'), amber = hex('F2A93B'), blue = hex('4C9BE8'), teal = hex('5DCAA5'),
@@ -823,6 +823,77 @@ local function clock(c, r, s, value, top, unit, peakValue)
   centred(unit, math.max(9, r * 0.14), c, size * 0.50, st == 1 and K.dimw or K.red)
   centred('0', math.max(9, r * 0.13), onArc(c, r - 30 * s, A0), -6 * s, K.dimw)
   centred(thousands(top), math.max(9, r * 0.13), onArc(c, r - 34 * s, A1), -6 * s, K.dimw)
+end
+
+-- Horsepower and torque in one clock: horsepower large with a red arc, torque under it with a white arc inside.
+-- A tick on each arc marks the best seen.
+local function powerClock(c, r, s, hpTop, tqTop)
+  local st = stage()
+  local ring = st == 1 and K.ring or K.red
+  ui.drawCircleFilled(c, r, K.face, 48)
+  stroke(c, r - 5 * s, A0, A1, ring, 1.5 * s)
+  for i = 0, 10 do
+    local a = A0 + (A1 - A0) * i / 10
+    ui.drawLine(onArc(c, r - 4 * s, a), onArc(c, r - (i % 5 == 0 and 13 or 9) * s, a), ring, (i % 5 == 0 and 2 or 1) * s)
+  end
+  local function value(radius, thick, v, top, peakValue, color)
+    local f = math.max(0, math.min(1, v / top))
+    stroke(c, radius, A0, A1, K.off, thick)
+    if f > 0.005 then stroke(c, radius, A0, A0 + (A1 - A0) * f, color, thick) end
+    if peakValue > 0 then
+      local ap = A0 + (A1 - A0) * math.min(1, peakValue / top)
+      ui.drawLine(onArc(c, radius - thick, ap), onArc(c, radius + thick, ap), K.white, 2 * s)
+    end
+  end
+  value(r - 15 * s, 6 * s, now.hp, hpTop, peak.hp, K.red)
+  value(r - 25 * s, 4 * s, now.tq, tqTop, peak.tq, K.white)
+  centred(thousands(now.hp), r * 0.36, c, -r * 0.47, K.white)
+  centred('hp', math.max(9, r * 0.12), c, -r * 0.10, K.red)
+  centred(thousands(now.tq), r * 0.27, c, r * 0.08, K.white)
+  centred('lb-ft', math.max(9, r * 0.12), c, r * 0.37, K.dimw)
+end
+
+-- The power curve inside a clock: horsepower in red and torque in white against revs, filled in by full-throttle
+-- pulls, with a marker at the revs the engine is turning now.
+local function graphClock(c, r, s)
+  local st = stage()
+  local ring = st == 1 and K.ring or K.red
+  ui.drawCircleFilled(c, r, K.face, 48)
+  stroke(c, r - 5 * s, A0 - 0.5, A1 + 0.5, ring, 1.5 * s)
+  local x0, x1, y0, y1 = c.x - r * 0.62, c.x + r * 0.62, c.y - r * 0.46, c.y + r * 0.40
+  local rpmMax = math.max(2000, now.limiter)
+  local top = niceTop(math.max(200, peak.hp, peak.tq))
+  local function X(rpm) return x0 + (x1 - x0) * math.min(1, rpm / rpmMax) end
+  local function Y(v) return y1 - (y1 - y0) * math.min(1, v / top) end
+  ui.drawLine(vec2(x0, y1), vec2(x1, y1), K.dimw, 1)
+  ui.drawLine(vec2(x0, (y0 + y1) / 2), vec2(x1, (y0 + y1) / 2), K.off, 1)
+  ui.drawLine(vec2(x0, y0), vec2(x1, y0), K.off, 1)
+  local small = math.max(9, r * 0.11)
+  ui.dwriteDrawText(thousands(top), small, vec2(x0, y0 - small * 1.25), K.dimw)
+  ui.dwriteDrawText('hp', small, vec2(x1 - small * 4.6, y0 - small * 1.25), K.red)
+  ui.dwriteDrawText('lb-ft', small, vec2(x1 - small * 2.9, y0 - small * 1.25), K.white)
+  centred('0', small, vec2(x0, y1), 3 * s, K.dimw)
+  centred(string.format('%dk', math.floor(rpmMax / 1000 + 0.5)), small, vec2(x1, y1), 3 * s, K.dimw)
+  local keys = {}
+  for k, _ in pairs(bins) do keys[#keys + 1] = k end
+  table.sort(keys)
+  if #keys >= 2 then
+    ui.pathClear()
+    for i = 1, #keys do ui.pathLineTo(vec2(X(keys[i] * 100 + 50), Y(bins[keys[i]]))) end
+    ui.pathStroke(K.white, false, 2 * s)
+    ui.pathClear()
+    for i = 1, #keys do
+      local rpm = keys[i] * 100 + 50
+      ui.pathLineTo(vec2(X(rpm), Y(bins[keys[i]] / NM_TO_LBFT * rpm / 7121)))
+    end
+    ui.pathStroke(K.red, false, 2.5 * s)
+  else
+    centred('full throttle fills this in', small, c, -small * 0.6, K.dimw)
+  end
+  ui.drawLine(vec2(X(now.rpm), y0), vec2(X(now.rpm), y1), K.dimw, 1)
+  ui.drawCircleFilled(vec2(X(now.rpm), Y(now.tq)), 3.5 * s, K.white, 12)
+  ui.drawCircleFilled(vec2(X(now.rpm), Y(now.hp)), 4 * s, K.red, 12)
+  centred('power curve', small, c, r * 0.60, K.dimw)
 end
 
 local function pill(id, c, w, hgt, text, color, onClick)   -- a small outlined light; a click works the switch
@@ -925,8 +996,8 @@ function windowCluster(dt)
   local mphTop = now.mph > 200 and 300 or 200
   clock(at(76, 180), 76 * s, s, now.mph, mphTop, 'mph', nil)
   lights(at(904, 180), 76 * s, s)
-  clock(at(250, 168), 96 * s, s, now.hp, hpTop, 'hp', peak.hp)
-  clock(at(730, 168), 96 * s, s, now.tq, tqTop, 'lb-ft', peak.tq)
+  powerClock(at(250, 168), 96 * s, s, hpTop, tqTop)
+  graphClock(at(730, 168), 96 * s, s)
   revCounter(at(490, 150), 136 * s, s)
 end
 
