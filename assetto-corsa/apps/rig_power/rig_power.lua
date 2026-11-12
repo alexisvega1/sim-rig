@@ -10,6 +10,7 @@
 -- records full-throttle moments, so each pull through the revs fills in more.
 
 local NM_TO_LBFT = 0.7375621
+local BAR_TO_PSI = 14.504
 local ROOT = ac.getFolder(ac.FolderID.Root)
 local OUT = ROOT .. '/rig_power_telem.txt'
 
@@ -45,7 +46,7 @@ local curve = nil            -- the car's torque curve without boost
 local curveTried = false
 local peak = { boost = 0, hp = 0, tq = 0, hpRpm = 0, tqRpm = 0 }
 local bins = {}              -- [rpm/100] = best full-throttle torque (lb-ft) seen there
-local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0 }
+local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0, mph = 0 }
 local acc, seq = 0, 0
 
 -- The wheel's turning controls, laid out as on a MOZA KS Pro: four thumb wheels and five knobs. x and y place each
@@ -378,6 +379,7 @@ local function sample()
   if not curveTried then loadCurve() end
   now.rpm, now.boost, now.gas = num(car.rpm), math.max(0, num(car.turboBoost)), num(car.gas)
   now.gear = num(car.gear)
+  now.mph = num(car.speedKmh) * 0.621371
   local lim = num(car.rpmLimiter)
   if lim > 1000 then now.limiter = lim end
   local base = 0
@@ -512,23 +514,24 @@ end
 local function drawDial(o)
   local c, r = vec2(o.x + 85, o.y + 82), 62
   local a0, a1 = math.pi * 0.75, math.pi * 2.25
-  local top = math.max(1.0, math.ceil(peak.boost * 2 + 0.2) / 2)   -- scale grows in half steps with the best boost seen
+  local psi, peakPsi = now.boost * BAR_TO_PSI, peak.boost * BAR_TO_PSI
+  local top = math.max(15, math.ceil((peakPsi + 1) / 10) * 10)       -- scale grows in tens of psi with the best boost seen
   arc(c, r, a0, a1, COL.track, 10)
-  local f = math.min(1, now.boost / top)
+  local f = math.min(1, psi / top)
   if f > 0.004 then arc(c, r, a0, a0 + (a1 - a0) * f, COL.boost, 10) end
   for i = 0, 8 do
     local a = a0 + (a1 - a0) * i / 8
     ui.drawLine(onArc(c, r - 9, a), onArc(c, r - 14, a), COL.tick, 1)
   end
   if peak.boost > 0 then
-    local ap = a0 + (a1 - a0) * math.min(1, peak.boost / top)
+    local ap = a0 + (a1 - a0) * math.min(1, peakPsi / top)
     ui.drawLine(onArc(c, r - 8, ap), onArc(c, r + 8, ap), COL.text, 2)
   end
-  label(string.format('%.2f', now.boost), 32, vec2(c.x, c.y - 30), COL.text, 0.5)
-  label('bar boost', 11, vec2(c.x, c.y + 8), COL.dim, 0.5)
-  label(string.format('%.1f psi', now.boost * 14.504), 11, vec2(c.x, c.y + 24), COL.boost, 0.5)
+  label(string.format('%.1f', psi), 32, vec2(c.x, c.y - 30), COL.text, 0.5)
+  label('psi boost', 11, vec2(c.x, c.y + 8), COL.dim, 0.5)
+  label(string.format('%.2f bar', now.boost), 11, vec2(c.x, c.y + 24), COL.boost, 0.5)
   label('0', 11, vec2(o.x + 26, o.y + 134), COL.faint, 0.5)
-  label(string.format('%.1f', top), 11, vec2(o.x + 144, o.y + 134), COL.faint, 0.5)
+  label(string.format('%d', top), 11, vec2(o.x + 144, o.y + 134), COL.faint, 0.5)
 end
 
 local function drawReadout(o, w, title, value, peakValue, peakRpm, color)
@@ -766,6 +769,165 @@ function windowWheel(dt)
   if cfg == nil then
     label('MAP, REV and SOUND only act on cars that have them', 11, vec2(o.x + w / 2, o.y + h - 20), COL.faint, 0.5)
   end
+end
+
+-- the Cluster window ----------------------------------------------------------
+-- Five round clocks in a row, the way a sports car's instrument cluster is laid out: speed, horsepower, a large
+-- rev counter in the middle, torque, and a small one for the map, rev limit and sound. Only the clocks are drawn,
+-- so the track shows between and around them.
+local K = {
+  face = hex('07090B', 0.74), ring = hex('F4F7FA', 0.9), white = hex('F4F7FA'), ink = hex('0B0E11'), dimw = hex('F4F7FA', 0.55),
+  off = hex('F4F7FA', 0.13), red = hex('E0312E'), amber = hex('F2A93B'), blue = hex('4C9BE8'), teal = hex('5DCAA5'),
+}
+local A0, A1 = math.pi * 0.75, math.pi * 2.25              -- every scale sweeps 270 degrees, gap at the bottom
+local clusterTime = 0
+
+-- The cluster has three looks, taken in turn as the revs climb towards the limit:
+--   1  calm       white rev counter face, black figures               below 85% of the limit
+--   2  warning    black face ringed with red ticks, white figures     85% to 93%
+--   3  shift      solid red face, black figures, red clocks all round  from 93%
+local function stage()
+  local frac = math.max(0, math.min(1, now.rpm / math.max(1, now.limiter)))
+  return frac >= 0.93 and 3 or (frac >= 0.85 and 2 or 1), frac
+end
+
+local function stroke(c, r, a0, a1, color, thick)          -- an arc with square ends
+  ui.pathClear()
+  ui.pathArcTo(c, r, a0, a1, math.max(8, math.floor((a1 - a0) * 14)))
+  ui.pathStroke(color, false, thick)
+end
+
+local function centred(text, size, c, dy, color)
+  local w = ui.measureDWriteText(text, size).x
+  ui.dwriteDrawText(text, size, vec2(c.x - w / 2, c.y + dy), color)
+end
+
+-- A side clock: one big number, its unit, a thin scale with a red marker at the value and a tick at the best seen.
+local function clock(c, r, s, value, top, unit, peakValue)
+  local st = stage()
+  local ring = st == 1 and K.ring or K.red                 -- the bezels go red with the rev counter
+  ui.drawCircleFilled(c, r, K.face, 48)
+  stroke(c, r - 5 * s, A0, A1, ring, 1.5 * s)
+  for i = 0, 10 do
+    local a = A0 + (A1 - A0) * i / 10
+    ui.drawLine(onArc(c, r - 4 * s, a), onArc(c, r - (i % 5 == 0 and 13 or 9) * s, a), ring, (i % 5 == 0 and 2 or 1) * s)
+  end
+  local f = math.max(0, math.min(1, value / top))
+  if f > 0.005 then stroke(c, r - 14 * s, A0, A0 + (A1 - A0) * f, K.red, 6 * s) end   -- the value, as a red arc
+  if peakValue ~= nil and peakValue > 0 then
+    local ap = A0 + (A1 - A0) * math.min(1, peakValue / top)
+    ui.drawLine(onArc(c, r - 9 * s, ap), onArc(c, r - 21 * s, ap), K.white, 2 * s)       -- the best seen
+  end
+  local size = r * 0.56
+  centred(thousands(value), size, c, -size * 0.66, K.white)
+  centred(unit, math.max(9, r * 0.14), c, size * 0.50, st == 1 and K.dimw or K.red)
+  centred('0', math.max(9, r * 0.13), onArc(c, r - 30 * s, A0), -6 * s, K.dimw)
+  centred(thousands(top), math.max(9, r * 0.13), onArc(c, r - 34 * s, A1), -6 * s, K.dimw)
+end
+
+local function pill(id, c, w, hgt, text, color, onClick)   -- a small outlined light; a click works the switch
+  ui.drawRect(vec2(c.x - w / 2, c.y - hgt / 2), vec2(c.x + w / 2, c.y + hgt / 2), color, hgt / 2, nil, 1.5)
+  local size = hgt * 0.62
+  centred(text, size, c, -size * 0.66, color)
+  if onClick ~= nil then
+    ui.setCursor(vec2(c.x - w / 2, c.y - hgt / 2))
+    if ui.invisibleButton(id, vec2(w, hgt)) then onClick() end
+  end
+end
+
+local function revCounter(c, r, s)
+  local st, frac = stage()
+  local shift = frac >= 0.985
+  local blink = shift and math.floor(clusterTime * 10) % 2 == 0     -- at the shift point the rev light flashes
+  ui.drawCircleFilled(c, r, K.face, 64)
+  -- the rev light: a ring of segments round the outside that fills with the revs
+  local n = 45
+  local light = st == 1 and K.white or K.red
+  for i = 0, n - 1 do
+    local a = A0 + (A1 - A0) * i / n
+    local lit = shift or (i + 0.5) / n <= frac
+    stroke(c, r - 6 * s, a + 0.012, a + (A1 - A0) / n - 0.012, lit and (blink and K.white or light) or K.off, 8 * s)
+  end
+  -- the face with the thousands on it, in the look for this stage
+  local rf = r - 30 * s
+  local figures = K.ink
+  if st == 1 then
+    stroke(c, rf, A0 - 0.06, A1 + 0.06, K.white, 26 * s)
+    stroke(c, rf, A0 + (A1 - A0) * 0.93, A1 + 0.06, K.red, 26 * s)          -- a red block where the limit is
+  elseif st == 2 then
+    figures = K.white
+    stroke(c, rf, A0 - 0.06, A1 + 0.06, hex('07090B', 0.92), 26 * s)
+    for i = 0, 90 do                                                          -- a ring of fine red ticks
+      local a = A0 + (A1 - A0) * i / 90
+      ui.drawLine(onArc(c, rf + 8 * s, a), onArc(c, rf + 13 * s, a), K.red, 1.5 * s)
+    end
+  else
+    stroke(c, rf, A0 - 0.06, A1 + 0.06, K.red, 26 * s)
+    stroke(c, rf, A0 + (A1 - A0) * 0.93, A1 + 0.06, K.ink, 26 * s)
+  end
+  local thousandsTop = math.floor(now.limiter / 1000 + 0.5)
+  local size = math.max(10, (thousandsTop > 9 and 15 or 19) * s)
+  for k = 0, thousandsTop do
+    local a = A0 + (A1 - A0) * (k * 1000 / now.limiter)
+    centred(string.format('%d', k), size, onArc(c, rf - (st == 2 and 3 * s or 0), a), -size * 0.66,
+      (st ~= 2 and k * 1000 >= now.limiter * 0.93) and K.white or figures)
+  end
+  local zone = st == 1 and K.white or K.red
+  -- the black middle: boost on a ring, the gear, the revs and the boost in figures
+  local rc = r - 45 * s
+  ui.drawCircleFilled(c, rc, hex('07090B', 0.92), 48)
+  local psi = now.boost * BAR_TO_PSI
+  local boostTop = math.max(15, math.ceil((math.max(peak.boost, now.boost) * BAR_TO_PSI + 1) / 10) * 10)
+  stroke(c, rc - 8 * s, A0, A1, K.off, 6 * s)
+  if psi > 0.2 then stroke(c, rc - 8 * s, A0, A0 + (A1 - A0) * math.min(1, psi / boostTop), K.teal, 6 * s) end
+  local gearText = now.gear < 0 and 'R' or (now.gear == 0 and 'N' or string.format('%d', now.gear))
+  local gs = rc * 0.78
+  centred(gearText, gs, c, -gs * 0.82, K.white)
+  centred(thousands(math.floor(now.rpm / 10 + 0.5) * 10), 15 * s, c, gs * 0.20, zone)
+  centred(string.format('%.1f psi', psi), 12 * s, c, gs * 0.20 + 19 * s, K.teal)
+  -- the needle, over the face only
+  local an = A0 + (A1 - A0) * frac
+  ui.drawLine(onArc(c, rc + 2 * s, an), onArc(c, r - 2 * s, an), st == 3 and K.white or K.red, 4 * s)
+  if cfg ~= nil then                                       -- which map is live, where a road car shows its drive mode
+    local m = clampIndex(store.map, #cfg.maps)
+    pill('##clmap', vec2(c.x, c.y + r - 20 * s), 64 * s, 17 * s, cfg.maps[m].name .. ' hp', m > 1 and K.red or K.white, flipMap)
+  end
+end
+
+-- The small clock on the right: the sound and the rev limit as two quiet lights. A click works each switch.
+local function lights(c, r, s)
+  ui.drawCircleFilled(c, r, K.face, 48)
+  stroke(c, r - 5 * s, A0, A1, stage() == 1 and K.ring or K.red, 1.5 * s)
+  stroke(c, r - 9 * s, A0, A1, K.dimw, 1 * s)
+  if cfg == nil then return end
+  local sound = cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name
+  centred('sound', math.max(9, 10 * s), c, -r * 0.62, K.dimw)
+  pill('##clsound', vec2(c.x, c.y - r * 0.22), r * 1.45, 19 * s, sound, K.white, cycleSound)
+  if cfg.revs ~= nil then
+    local live = 1
+    for i = 2, #cfg.revs do
+      if math.abs(now.limiter - cfg.revs[i].rpm) < math.abs(now.limiter - cfg.revs[live].rpm) then live = i end
+    end
+    centred('rev limit', math.max(9, 10 * s), c, r * 0.10, K.dimw)
+    pill('##clrev', vec2(c.x, c.y + r * 0.50), r * 0.9, 19 * s, cfg.revs[live].name, live > 1 and K.red or K.white, flipRev)
+  end
+end
+
+function windowCluster(dt)
+  clusterTime = clusterTime + (dt or 0.016)
+  local o = ui.getCursor()
+  local space = ui.availableSpace()
+  local s = math.min(space.x / 980, space.y / 300)
+  local function at(x, y) return vec2(o.x + space.x / 2 + (x - 490) * s, o.y + space.y / 2 + (y - 150) * s) end
+  if ac.getCar(0) == nil then return end
+  local hpTop = niceTop(math.max(400, peak.hp))
+  local tqTop = niceTop(math.max(400, peak.tq))
+  local mphTop = now.mph > 200 and 300 or 200
+  clock(at(76, 180), 76 * s, s, now.mph, mphTop, 'mph', nil)
+  lights(at(904, 180), 76 * s, s)
+  clock(at(250, 168), 96 * s, s, now.hp, hpTop, 'hp', peak.hp)
+  clock(at(730, 168), 96 * s, s, now.tq, tqTop, 'lb-ft', peak.tq)
+  revCounter(at(490, 150), 136 * s, s)
 end
 
 function windowMain(dt)
