@@ -13,6 +13,9 @@ to an installed copy of the car, so the tune can be rebuilt from the original mo
     redline     9,000 rpm instead of 7,200 (--redline to choose): the torque curve is stretched
                 up the rev range and the gearing shortened to match, so power and the speed in
                 each gear stay the same and only the revs rise
+    high revs   a second rev limit, 12,000 rpm (--high-redline, 0 for none), switched while driving
+                with the patch's "Extra F" switch: a script in the car raises the limit and shortens
+                the final drive by the same factor. Peak power is held from 9,000 to 12,000 rpm.
     sound       backfire from lower revs
 
 Every file it changes is first copied to <name>.orig-before-tune (once).
@@ -61,6 +64,15 @@ class Car:
         if not (self.data / (name + BACKUP)).exists():
             shutil.copy2(path, self.data / (name + BACKUP))
         path.write_bytes(new.encode("utf-8", "surrogateescape"))
+
+    def write(self, name: str, text: str):
+        """A file of our own (not one of the mod's)."""
+        path = self.data / name
+        if path.exists() and path.read_text() == text:
+            return
+        self.changed.append(name)
+        if not self.dry:
+            path.write_text(text)
 
     def park(self, name: str):
         """Take a file out of the game's sight without deleting it."""
@@ -128,7 +140,30 @@ def gearbox(t: str) -> str:
 STOCK_LIMITER = 7200
 
 
-def revs(k: float):
+SWITCH = "F"            # the Custom Shaders Patch extra switch that selects the high rev limit
+
+SCRIPT = """-- Rev limit switch, written by tune.py. Extra switch %(switch)s off: %(low)d rpm. On: %(high)d rpm, with the
+-- final drive shortened by the same factor, so the speed reached in each gear does not change.
+if car.isAIControlled then
+  return nil
+end
+
+local LOW, HIGH, FINAL = %(low)d, %(high)d, %(final)s
+local mode, timer = -1, 0
+
+function script.update(dt)
+  local want = car.extra%(switch)s and 1 or 0
+  timer = timer + dt
+  if want == mode and timer < 1 then return end      -- set again once a second: a session restart resets the car
+  mode, timer = want, 0
+  local limit = want == 1 and HIGH or LOW
+  ac.setEngineRPMLimit(limit, true)
+  ac.setGearsFinalRatio(FINAL * limit / LOW)
+end
+"""
+
+
+def revs(k: float, high: int = 0):
     """Engine side of a higher redline: everything measured in rpm moves up by k."""
     def fn(t: str) -> str:
         t = set_key(t, "ENGINE_DATA", "LIMITER", round(STOCK_LIMITER * k))
@@ -137,19 +172,31 @@ def revs(k: float):
         t = set_key(t, "COAST_REF", "TORQUE", round(70 / k, 1))            # same engine braking at the wheels
         for sec in ("TURBO_0", "TURBO_1"):
             t = set_key(t, sec, "REFERENCE_RPM", round(4200 * k))
-        return set_key(t, "DAMAGE", "RPM_THRESHOLD", round(7500 * k))
+        return set_key(t, "DAMAGE", "RPM_THRESHOLD", max(round(7500 * k), high + 500))
     return fn
 
 
-def curve(original: str, k: float) -> str:
-    """power.lut stretched up the rev range: k times the revs, 1/k the torque, so the same power."""
+def curve(original: str, k: float, high: int = 0) -> str:
+    """power.lut stretched up the rev range: k times the revs, 1/k the torque, so the same power.
+    With a high rev limit the curve carries on past the normal one at constant power."""
     nl = "\r\n" if "\r\n" in original else "\n"
-    rows = []
+    pts = []
     for line in original.replace("\r", "").split("\n"):
         if "|" in line:
             rpm, nm = line.split("|")[:2]
-            rows.append(f"{round(float(rpm) * k)}|{float(nm.split(';')[0]) / k:.1f}")
-    return nl.join(rows) + nl
+            pts.append((float(rpm) * k, float(nm.split(";")[0]) / k))
+    low = STOCK_LIMITER * k
+    if high > low:
+        (r0, t0), (r1, t1) = max(p for p in pts if p[0] <= low), min(p for p in pts if p[0] > low)
+        at_limit = t0 + (t1 - t0) * (low - r0) / (r1 - r0)
+        pts = [p for p in pts if p[0] < low] + [(low, at_limit)]
+        rpm = (low // 500 + 1) * 500
+        while rpm < high:
+            pts.append((rpm, at_limit * low / rpm))
+            rpm += 500
+        top = at_limit * low / high
+        pts += [(high, top), (high + 250, top * 0.97), (high + 500, top * 0.90)]   # falls away past the limiter, as the original does
+    return nl.join(f"{round(r)}|{nm:.1f}" for r, nm in pts) + nl
 
 
 def gearing(k: float):
@@ -174,6 +221,7 @@ def main():
     ap.add_argument("--data", type=Path, default=DEFAULT, help="the car's data folder")
     ap.add_argument("--dry-run", action="store_true", help="say what would change, change nothing")
     ap.add_argument("--redline", type=int, default=9000, help="rev limit in rpm (the mod's own is 7200)")
+    ap.add_argument("--high-redline", type=int, default=12000, help="second rev limit on Extra F; 0 for none")
     ap.add_argument("--backup-suffix", default=BACKUP, help="suffix for the copies kept of the files as they were")
     a = ap.parse_args()
     if not (a.data / "engine.ini").exists():
@@ -185,7 +233,8 @@ def main():
     car.edit("brakes.ini", brakes)
     car.edit("aero.ini", downforce)
     car.edit("suspensions.ini", springs)
-    car.edit("engine.ini", lambda t: revs(k)(power(t)))
+    high = a.high_redline if a.high_redline > a.redline else 0
+    car.edit("engine.ini", lambda t: revs(k, high)(power(t)))
     car.park("ctrl_turbo0.ini")                         # these capped each turbo at 0.9 bar whatever engine.ini said
     car.park("ctrl_turbo1.ini")
     car.edit("drivetrain.ini", lambda t: gearing(k)(gearbox(t)))
@@ -193,7 +242,11 @@ def main():
     # the curve is always rebuilt from the mod's own: the oldest copy kept of it, or the file itself on a first run
     kept = sorted(glob.glob(str(a.data / "power.lut.*")), key=lambda p: Path(p).stat().st_mtime)
     original = Path(kept[0] if kept else a.data / "power.lut").read_bytes().decode("utf-8", "surrogateescape")
-    car.edit("power.lut", lambda _: curve(original, k) if abs(k - 1) > 1e-9 else original)
+    car.edit("power.lut", lambda _: curve(original, k, high) if high or abs(k - 1) > 1e-9 else original)
+    if high:
+        car.write("script.lua", SCRIPT % dict(switch=SWITCH, low=a.redline, high=high, final=round(4.09 * k, 3)))
+    elif (a.data / "script.lua").exists() and "written by tune.py" in (a.data / "script.lua").read_text():
+        car.park("script.lua")
     print(("would change: " if a.dry_run else "changed: ") + (", ".join(car.changed) or "nothing, already tuned"))
 
 

@@ -24,6 +24,9 @@ What the recorded laps showed along the way:
   The wastegate is now sized so both maps sit on a step: 60% is 2,000 hp, 80% is 2,520 hp.
 - With about 1,880 hp the car reached 260 mph where it had managed 205, and traction control was busy up to 120 mph
   instead of 90. The lap was no quicker than with 1,090 hp: the time is now in getting the power down.
+- Two rev limits: the car carries a small script (`data/script.lua`, written by `tune.py`) that switches between
+  9,000 and 12,000 rpm while driving, using the patch's "Extra F" switch or the REV switch in the gauge app. At 12,000
+  the final drive is a third shorter, so each gear reaches the same speed, and full power is held from 9,000 to 12,000.
 - Redline: `--redline` moves the rev limit (9,000 by default; the mod's is 7,200). The torque curve is stretched up
   the rev range and the final drive shortened by the same factor, so power and the speed in each gear are unchanged
   and only the revs rise.
