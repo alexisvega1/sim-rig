@@ -297,7 +297,7 @@ def main():
         sk.sendto(struct.pack('<iii', 1, 1, 0), addr); d, _ = sk.recvfrom(4096)
         name = d[0:100].decode('utf-16le', 'ignore').split('%')[0]
         print('connected to AC, car', name, flush=True)
-        sk.sendto(struct.pack('<iii', 1, 1, 1), addr); sk.settimeout(0.05); return sk, name  # last_rx reset by caller
+        sk.sendto(struct.pack('<iii', 1, 1, 1), addr); sk.setblocking(False); return sk, name  # last_rx reset by caller
     next_tick = time.time(); ac_retry = 0; last_rx = time.time()
     try:
         while True:
@@ -312,8 +312,10 @@ def main():
                 except Exception: ac_retry = now + 2
             if s is not None:
                 got = False
+                # Take every packet that is waiting and move on. This used to wait for 20 packets before each
+                # update: the game sends one per frame, so the wheel was only updated 3 to 5 times a second while driving.
                 try:
-                    for _ in range(20):
+                    for _ in range(500):
                         d, _ = s.recvfrom(4096)
                         if len(d) != 328: continue          # RTCarInfo only (408 = handshake, 212 = lap)
                         got = True; last_rx = now
@@ -326,7 +328,7 @@ def main():
                         r = struct.unpack_from('<f', d, 68)[0]; st['rpm'] = r if 0 <= r < 30000 else st['rpm']
                         g = struct.unpack_from('<i', d, 76)[0]; st['gear'] = -1 if g == 0 else g - 1
                         if a.max_rpm <= 0 and st.get('limiter', 0) <= 1000 and st['rpm'] > st['maxrpm']: st['maxrpm'] = st['rpm']
-                except socket.timeout: pass
+                except (BlockingIOError, socket.timeout): pass
                 except Exception: s = None
                 if s is not None and now - last_rx > 3.0:   # game switched / AC restarted → rebind
                     print('AC telemetry stale — reconnecting', flush=True)
@@ -335,6 +337,7 @@ def main():
                     s = None; ac_retry = now + 0.5
             if now < next_tick: time.sleep(min(0.005, next_tick - now)); continue
             next_tick += 1 / 30; tick += 1
+            if now - next_tick > 0.5: next_tick = now     # fell behind: carry on from now, do not send a burst to catch up
             if tick % 2 == 0: read_extra(st)   # ~15 Hz
             # authoritative rev limiter from the in-game CSP app beats auto-learn.
             # ratchet UP only — some mods report a flickering limiter (e.g. 8400<->9000);
