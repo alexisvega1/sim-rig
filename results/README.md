@@ -1,6 +1,6 @@
 # Lap log
 
-267 laps in 65 sessions, 2026-09-12 to 2026-11-11. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
+268 laps in 66 sessions, 2026-09-12 to 2026-11-11. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
 
 ## Ferrari F2004
 
@@ -99,6 +99,7 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 | 2026-11-11 21:28 | 3 | Slick | 2:00.510 | 2:00.887 | 0.4 s |
 | 2026-11-11 22:06 | 9 | Slick | 2:00.844 | 2:04.105 | 9.6 s |
 | 2026-11-11 22:35 | 5 | Slick | 1:54.338 | 2:01.001 | 11.3 s |
+| 2026-11-11 23:03 | 1 | Slick | 4:08.978 | 4:08.978 | - |
 
 <details><summary>Every lap</summary>
 
@@ -136,6 +137,7 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 | 2026-11-11 | 3 | 2:06.768 | 0:43.049 | 0:48.407 | 0:35.312 | Slick |  |
 | 2026-11-11 | 4 | 2:05.684 | 0:42.529 | 0:51.061 | 0:32.094 | Slick |  |
 | 2026-11-11 | 5 | **1:54.338** | 0:38.905 | 0:43.934 | 0:31.499 | Slick |  |
+| 2026-11-11 | 1 | 4:08.978 | 1:45.176 | 1:44.436 | 0:39.366 | Slick |  |
 
 </details>
 
@@ -222,7 +224,7 @@ Best lap **6:59.801** on 2026-10-09, on Toyo R888R tyres. Best sectors added tog
 | Nordschleife | Porsche Carrera GT | 1 | 3 | 8:20.131 | Hypercar road | 8:20.131 | 2026-09-13 |
 | PCH - Southbound | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 1 | 1 | 11:29.542 | Toyo R888R | - | 2026-09-12 |
 | Road America | Ferrari F2004 | 4 | 30 | 1:43.726 | M | 1:42.349 | 2026-11-11 |
-| Road America | Porsche 911 GT2 RS / 2000hp MONSTER | 7 | 32 | 1:54.338 | Slick | 1:53.441 | 2026-11-11 |
+| Road America | Porsche 911 GT2 RS / 2000hp MONSTER | 8 | 33 | 1:54.338 | Slick | 1:53.441 | 2026-11-11 |
 | Road America | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 5 | 40 | 2:02.617 | Toyo R888R | 2:01.908 | 2026-09-25 |
 | Road America | Ferrari F138 | 1 | 5 | 2:07.539 | M | 1:56.999 | 2026-09-15 |
 | Road America | Ferrari FXX K | 1 | 5 | 2:10.376 | M | 2:09.726 | 2026-09-16 |
