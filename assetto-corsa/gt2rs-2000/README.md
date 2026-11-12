@@ -10,7 +10,8 @@ originals beside them as `<name>.orig-before-tune`. Run it with the game closed.
 | Brakes | brake torque 4150 -> 6000 N·m, brake pedal recalibrated | 2:10.853 |
 | Slicks | third tyre compound, grip about 1.76-1.82 (Cup 2: 1.58) | 2:03.624 |
 | Downforce | front, rear and diffuser lift x3, springs 68/79 -> 110/150 kN/m | 2:00.510 |
-| Power | 2,005 hp default, 2,500 hp map, stronger clutch, longer 7th | not yet driven |
+| Power | about 1,880 hp as first driven (see below), stronger clutch, longer 7th | 2:00.844, 260 mph |
+| Redline | 9,000 rpm, maps corrected to 2,000 and 2,520 hp | not yet driven |
 
 What the recorded laps showed along the way:
 
@@ -18,7 +19,14 @@ What the recorded laps showed along the way:
 - Downforce, from tyre loads: about 1,090 kg at 153 mph and 2,050 kg at 202 mph, roughly 26% of it on the front axle.
   Cornering above 150 mph rose from 1.46 g to 2.68 g. Top speed fell from 224 to 205 mph.
 - Power: as downloaded the car made about 1,090 hp, not 2,000. Two controller files held each turbo at 0.9 bar.
-  With them out of the way, 3.58 bar total gives 2,005 hp at 7,200 rpm and 4.71 bar gives 2,500 hp.
+  With them out of the way the gauge read 4.71 bar and 2,491 hp on the high map, as calculated. The default map
+  came out at 1,881 hp instead of 2,000: the game keeps the boost setting in steps of 10%, and 76% was read as 70%.
+  The wastegate is now sized so both maps sit on a step: 60% is 2,000 hp, 80% is 2,520 hp.
+- With about 1,880 hp the car reached 260 mph where it had managed 205, and traction control was busy up to 120 mph
+  instead of 90. The lap was no quicker than with 1,090 hp: the time is now in getting the power down.
+- Redline: `--redline` moves the rev limit (9,000 by default; the mod's is 7,200). The torque curve is stretched up
+  the rev range and the final drive shortened by the same factor, so power and the speed in each gear are unchanged
+  and only the revs rise.
 
 The brake pedal change is in the game's own `cfg/controls.ini`: `[BRAKES] MAX=0.88`, because a stiff brake spring
 kept the pedal from ever reading 100%.
