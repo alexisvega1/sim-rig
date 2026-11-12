@@ -384,6 +384,7 @@ local function sample()
   now.rpm, now.boost, now.gas = num(car.rpm), math.max(0, num(car.turboBoost)), num(car.gas)
   now.gear = num(car.gear)
   now.mph = num(car.speedKmh) * 0.621371
+  if now.mph > (peak.mph or 0) then peak.mph = now.mph end
   pcall(function() now.gx, now.gz = num(car.acceleration.x), num(car.acceleration.z) end)   -- g sideways and fore-aft
   now.brake, now.steer = num(car.brake), num(car.steer)
   local lim = num(car.rpmLimiter)
@@ -1083,8 +1084,14 @@ local function revCounter(c, r, s)
   ui.drawCircleFilled(c, rc, hex('07090B', 0.92), 48)
   local psi = now.boost * BAR_TO_PSI
   local boostTop = math.max(15, math.ceil((math.max(peak.boost, now.boost) * BAR_TO_PSI + 1) / 10) * 10)
+  -- The ring inside the face follows whatever is NOT on the left clock: boost when speed is on the left,
+  -- speed when boost is. Its full sweep is the fastest seen, rounded up to the next 50 mph (200 at least).
+  local ringNow, ringTop = psi, boostTop
+  if store.clusterLayout >= 2 then
+    ringNow, ringTop = now.mph, math.max(200, math.ceil(((peak.mph or 0) + 1) / 50) * 50)
+  end
   stroke(c, rc - 8 * s, A0, A1, K.off, 6 * s)
-  if psi > 0.2 then stroke(c, rc - 8 * s, A0, A0 + (A1 - A0) * math.min(1, psi / boostTop), K.teal, 6 * s) end
+  if ringNow / ringTop > 0.004 then stroke(c, rc - 8 * s, A0, A0 + (A1 - A0) * math.min(1, ringNow / ringTop), K.teal, 6 * s) end
   local gearText = now.gear < 0 and 'R' or (now.gear == 0 and 'N' or string.format('%d', now.gear))
   local gs = rc * 0.60                                     -- the gear, with clear space under it before the revs
   centred(gearText, gs, c, -rc * 0.66, K.white)
