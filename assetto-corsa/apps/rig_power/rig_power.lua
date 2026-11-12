@@ -1122,30 +1122,23 @@ end
 local function gForce(c, r, s, dt)
   ui.drawCircleFilled(c, r, K.face, 48)
   ui.drawCircle(c, r - 5 * s, stage() == 1 and K.ring or K.red, 48, 1.5 * s)
-  -- The plot sits in the upper part of the clock and the live figure has the space under it to itself,
-  -- so the dot can never be drawn over the figure.
-  local m = vec2(c.x, c.y - r * 0.14)                       -- middle of the plot
-  local reach = r * 0.50                                    -- 3 g
+  local reach = r - 27 * s
   local scale = reach / 3
-  ui.drawCircle(m, scale, K.off, 32, 1 * s)
-  ui.drawCircle(m, scale * 2, K.off, 40, 1 * s)
-  ui.drawCircle(m, reach, K.off, 48, 1 * s)
-  ui.drawLine(vec2(m.x - reach, m.y), vec2(m.x + reach, m.y), K.off, 1)
-  ui.drawLine(vec2(m.x, m.y - reach), vec2(m.x, m.y + reach), K.off, 1)
+  ui.drawCircle(c, scale, K.off, 32, 1 * s)
+  ui.drawCircle(c, scale * 2, K.off, 40, 1 * s)
+  ui.drawCircle(c, reach, K.off, 48, 1 * s)
+  ui.drawLine(vec2(c.x - reach, c.y), vec2(c.x + reach, c.y), K.off, 1)
+  ui.drawLine(vec2(c.x, c.y - reach), vec2(c.x, c.y + reach), K.off, 1)
   local k = math.min(1, (dt or 0.016) * 12)                  -- a little smoothing so the dot does not jitter
   G.x, G.z = G.x + (now.gx - G.x) * k, G.z + (now.gz - G.z) * k
   if now.mph > 10 and math.abs(G.x) < 6 and math.abs(G.z) < 6 then        -- moving, and not a crash
     G.left, G.right = math.max(G.left, -G.x), math.max(G.right, G.x)
     G.up, G.down = math.max(G.up, -G.z), math.max(G.down, G.z)
   end
-  local dot = 4.5 * s
   local function spot(gx, gz)
-    local g = math.sqrt(gx * gx + gz * gz)
-    local f = g > 3 and 3 / g or 1                           -- held at the outer ring beyond 3 g
-    local x, y = gx * f * scale, gz * f * scale
-    local far = math.sqrt(x * x + y * y)
-    if far > reach - dot then x, y = x * (reach - dot) / far, y * (reach - dot) / far end   -- the whole dot stays inside the plot
-    return vec2(m.x + x, m.y + y)   -- checked on a drive: a right-hand corner reads negative sideways, braking negative fore-aft
+    local m = math.sqrt(gx * gx + gz * gz)
+    local f = m > 3 and 3 / m or 1                           -- held at the outer ring beyond 3 g
+    return vec2(c.x + gx * f * scale, c.y + gz * f * scale)   -- checked on a drive: a right-hand corner reads negative sideways, braking negative fore-aft
   end
   G.timer = G.timer + (dt or 0.016)
   if G.timer > 0.05 then
@@ -1156,18 +1149,20 @@ local function gForce(c, r, s, dt)
   for i = #G.trail, 1, -1 do
     ui.drawCircleFilled(spot(G.trail[i][1], G.trail[i][2]), 2 * s, hex('F4F7FA', 0.45 * (1 - i / 26)), 8)
   end
-  ui.drawCircleFilled(spot(G.x, G.z), dot, K.red, 16)
-  local size = math.max(9, r * 0.13)                        -- the most seen each way, small and dim round the plot
-  centred(string.format('%.1f', G.up), size, vec2(m.x, m.y - reach - size * 1.15), 0, K.dimw)
-  ui.dwriteDrawText(string.format('%.1f', G.left), size, vec2(m.x - reach - ui.measureDWriteText(string.format('%.1f', G.left), size).x - 3 * s, m.y - size * 0.6), K.dimw)
-  ui.dwriteDrawText(string.format('%.1f', G.right), size, vec2(m.x + reach + 3 * s, m.y - size * 0.6), K.dimw)
-  local below = m.y + reach + 1 * s
-  ui.dwriteDrawText(string.format('%.1f', G.down), size, vec2(m.x + reach * 0.62, below), K.dimw)   -- under power: beside the live figure
-  local nowSize = math.max(11, r * 0.27)                    -- the g being pulled now, in its own space under the plot
-  centred(string.format('%.1f', math.sqrt(G.x * G.x + G.z * G.z)), nowSize, vec2(c.x, below), 0, K.white)
-  ui.setCursor(vec2(m.x - reach, m.y - reach))
+  ui.drawCircleFilled(spot(G.x, G.z), 5 * s, K.red, 16)
+  local nowSize = math.max(11, r * 0.26)                    -- the g being pulled now, drawn after the dot so it is always on top
+  local text = string.format('%.1f', math.sqrt(G.x * G.x + G.z * G.z))
+  centred(text, nowSize, vec2(c.x + 1 * s, c.y + 1 * s), r * 0.06, hex('07090B', 0.9))   -- a dark edge keeps it readable over the red
+  centred(text, nowSize, c, r * 0.06, K.white)
+  local size = math.max(9, r * 0.14)                        -- the most seen each way, smaller and dimmer than the live figure
+  centred(string.format('%.1f', G.up), size, vec2(c.x, c.y - r + 8 * s), 0, K.dimw)
+  centred(string.format('%.1f', G.down), size, vec2(c.x, c.y + r - 9 * s - size * 1.15), 0, K.dimw)
+  ui.dwriteDrawText(string.format('%.1f', G.left), size, vec2(c.x - r + 9 * s, c.y - size * 0.6), K.dimw)
+  local w = ui.measureDWriteText(string.format('%.1f', G.right), size).x
+  ui.dwriteDrawText(string.format('%.1f', G.right), size, vec2(c.x + r - 9 * s - w, c.y - size * 0.6), K.dimw)
+  ui.setCursor(vec2(c.x - reach, c.y - reach))
   if ui.invisibleButton('##clg', vec2(reach * 2, reach * 2)) then resetG() end
-  if ui.itemHovered() then ui.setTooltip('The large figure under the plot is the g being pulled now. Round the plot: the most seen braking (top), cornering each way (sides) and under power (lower right). Click to clear those.') end
+  if ui.itemHovered() then ui.setTooltip('The large figure is the g being pulled now. Round the edge: the most seen braking (top), under power (bottom) and cornering each way. Click to clear those.') end
 end
 
 -- The cluster's settings (the cog on its title bar): which arrangement of the clocks to show.
