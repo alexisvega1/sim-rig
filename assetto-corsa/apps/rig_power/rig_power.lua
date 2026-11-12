@@ -73,7 +73,7 @@ local GAME = {
   { 'DRS', 'DRS', 'DRS' }, { 'KERS', 'KERS', 'KERS' }, { '__EXT_FFB_RESET', '__EXT_FFB_RESET', 'FFB reset' },
 }
 
-local layout = { map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 }
+local layout = { graphOnly = false, map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 }
 for _, s in ipairs(SLOTS) do
   layout[s.id .. 'fn'], layout[s.id .. 'dev'], layout[s.id .. 'up'], layout[s.id .. 'dn'] = 0, '', s.up or -1, s.dn or -1
 end
@@ -942,6 +942,18 @@ function windowMain(dt)
   end
   local pad = 16
   local ix, iw = o.x + pad, w - pad * 2
+  if store.graphOnly then                                         -- just the power curve: the Cluster window shows the rest
+    ui.drawLine(vec2(ix, o.y + 19), vec2(ix + 14, o.y + 19), COL.hp, 2)
+    label(string.format('Horsepower %s', thousands(now.hp)), 11, vec2(ix + 20, o.y + 12), COL.dim, 0)
+    ui.drawLine(vec2(ix + 138, o.y + 19), vec2(ix + 152, o.y + 19), COL.tq, 2)
+    label(string.format('Torque %s', thousands(now.tq)), 11, vec2(ix + 158, o.y + 12), COL.dim, 0)
+    drawCurve(vec2(ix, o.y + 34), iw, math.max(60, h - 34 - 10))
+    ui.setCursor(vec2(ix + iw - 118, o.y + 8))
+    if ui.button('Reset', vec2(52, 20)) then resetPeaks() end
+    ui.setCursor(vec2(ix + iw - 60, o.y + 8))
+    if ui.button('Full', vec2(60, 20)) then store.graphOnly = false end
+    return
+  end
   label('Boost and power', 12, vec2(ix, o.y + 12), COL.dim, 0)
   ui.drawCircleFilled(vec2(ix + iw - 30, o.y + 20), 3, COL.live, 12)
   label('live', 11, vec2(ix + iw, o.y + 13), COL.dim, 1)
@@ -975,4 +987,6 @@ function windowMain(dt)
 
   ui.setCursor(vec2(ix + 150, o.y + 8))                           -- a small reset in the header
   if ui.button('Reset', vec2(52, 20)) then resetPeaks() end
+  ui.setCursor(vec2(ix + 208, o.y + 8))                           -- shrink the panel to the curve alone
+  if ui.button('Graph only', vec2(84, 20)) then store.graphOnly = true end
 end
