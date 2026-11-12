@@ -1,6 +1,6 @@
 # Lap log
 
-275 laps in 70 sessions, 2026-09-12 to 2026-11-12. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
+276 laps in 71 sessions, 2026-09-12 to 2026-11-12. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
 
 ## Ferrari F2004
 
@@ -152,6 +152,24 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 
 </details>
 
+### Porsche 911 GT2 RS / 2500hp MONSTER at Nordschleife
+
+Best lap **6:58.514** on 2026-11-12, on Slick tyres. Best sectors added together: **6:58.514**, 0.000 s quicker.
+
+![Lap times, Porsche 911 GT2 RS / 2500hp MONSTER at Nordschleife](porsche-911-gt2-rs-wss-2000-ks-nordschleife-nordschleife.svg)
+
+| Date | Laps | Tyres | Best | Median clean lap | Spread of clean laps |
+|---|---|---|---|---|---|
+| 2026-11-12 00:56 | 1 | Slick | 6:58.514 | 6:58.514 | - |
+
+<details><summary>Every lap</summary>
+
+| Date | Lap | Time | S1 | S2 | S3 | Tyres | Cuts |
+|---|---|---|---|---|---|---|---|
+| 2026-11-12 | 1 | **6:58.514** | 2:09.754 | 2:11.791 | 2:36.969 | Slick |  |
+
+</details>
+
 ## Nürburgring Nordschleife, other cars
 
 ### Porsche Carrera GT at Nordschleife
@@ -230,6 +248,7 @@ Best lap **6:59.801** on 2026-10-09, on Toyo R888R tyres. Best sectors added tog
 | Circuit of The Americas 2021 | Porsche 911 Carrera RSR 3.0 | 1 | 1 | 3:53.025 | V70 | 3:53.025 | 2026-09-13 |
 | LAC - Freeroam | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 2 | 2 | 0:00.002 | Toyo R888R | - | 2026-09-12 |
 | Nordschleife | Ferrari F2004 | 4 | 8 | 6:12.590 | M | 6:02.406 | 2026-09-30 |
+| Nordschleife | Porsche 911 GT2 RS / 2500hp MONSTER | 1 | 1 | 6:58.514 | Slick | 6:58.514 | 2026-11-12 |
 | Nordschleife | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 1 | 2 | 6:59.801 | Toyo R888R | 6:59.801 | 2026-10-09 |
 | Nordschleife | Brabus 900 Rocket R - Porsche 911 Turbo / No Hesi Spec | 1 | 2 | 7:25.405 | Toyo R888R | 7:22.737 | 2026-09-13 |
 | Nordschleife | Porsche Carrera GT | 1 | 3 | 8:20.131 | Hypercar road | 8:20.131 | 2026-09-13 |

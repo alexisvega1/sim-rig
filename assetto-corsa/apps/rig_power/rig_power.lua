@@ -471,10 +471,10 @@ function script.update(dt)
     mapName, level = (m.name:gsub(',', '')), m.level
   end
   pcall(function() soundRpm = num(ac.CarAudioTweak.getParameter(ac.CarAudioEventID.EngineExt, 'rpms')) end)
-  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s,%d,%.0f,%.2f,%.2f,%.2f,%.1f',
+  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s,%d,%.0f,%.2f,%.2f,%.2f,%.1f,%d,%.0f',
     seq, now.rpm, now.gas, now.boost, now.tq, now.hp,
     num(car.drivetrainTorque), num(car.drivetrainPower), num(car.turboCount),
-    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' ')), num(store.rev), soundRpm, now.gx, now.gz, now.brake, now.steer), true)
+    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' ')), num(store.rev), soundRpm, now.gx, now.gz, now.brake, now.steer, now.gear, now.mph), true)
 end
 
 -- drawing helpers ------------------------------------------------------------
