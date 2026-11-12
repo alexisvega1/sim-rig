@@ -1,6 +1,8 @@
 -- Boost and Power: a boost dial, live horsepower and torque, and the power curve
 -- the car actually makes, filled in as you drive. On cars listed in CARS below it
 -- also carries three switches: the engine map (how much boost), the rev limit and the engine sound.
+-- A second window, Wheel knobs, draws the wheel's turning controls, shows what each one does, and
+-- lets any of them be given one of those switches.
 --
 -- Engine output is worked out the way Assetto Corsa itself does it: the car's
 -- torque curve (data/power.lut, in N·m) multiplied by (1 + boost), then by how
@@ -46,7 +48,35 @@ local bins = {}              -- [rpm/100] = best full-throttle torque (lb-ft) se
 local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0 }
 local acc, seq = 0, 0
 
-local store = ac.storage({ map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 })
+-- The wheel's turning controls, laid out as on a MOZA KS Pro: four thumb wheels and five knobs. x and y place each
+-- on the Wheel knobs panel (0..1). up and dn are the buttons one click right and left sends; the thumb wheels start
+-- with the numbers the game's own controls were set up with, and any of them can be taught again on the panel.
+local SLOTS = {
+  { id = 'tc', name = 'TC', thumb = true, x = 0.10, y = 0.16, up = 45, dn = 44 },
+  { id = 'dif', name = 'DIFF', thumb = true, x = 0.10, y = 0.50, up = 49, dn = 48 },
+  { id = 'abs', name = 'ABS', thumb = true, x = 0.90, y = 0.16, up = 47, dn = 46 },
+  { id = 'bb', name = 'BB', thumb = true, x = 0.90, y = 0.50, up = 51, dn = 50 },
+  { id = 'k1', name = 'PINK', color = 'D946EF', x = 0.29, y = 0.40 },
+  { id = 'k2', name = 'GREEN', color = '2DD4BF', x = 0.39, y = 0.80 },
+  { id = 'kc', name = 'CENTRE', color = 'A78BFA', x = 0.50, y = 0.36 },
+  { id = 'k3', name = 'BLUE', color = '4C9BE8', x = 0.61, y = 0.80 },
+  { id = 'k4', name = 'ORANGE', color = 'F2703B', x = 0.71, y = 0.40 },
+}
+local FNS = { 'MAP', 'REV', 'SOUND' }                   -- what a knob can be given to do here (0 = nothing)
+-- The game's own bindings worth naming on the panel: section for one way, section for the other, what it is.
+local GAME = {
+  { 'TCUP', 'TCDN', 'traction control' }, { 'ABSUP', 'ABSDN', 'ABS' }, { 'TURBOUP', 'TURBODN', 'turbo boost' },
+  { 'BALANCEUP', 'BALANCEDN', 'brake bias' }, { 'ENGINE_BRAKE_UP', 'ENGINE_BRAKE_DN', 'engine brake' },
+  { '__EXT_FFB_INCREASE', '__EXT_FFB_DECREASE', 'force feedback' }, { '__EXT_ENGINEMAP_UP', '__EXT_ENGINEMAP_DOWN', 'engine map' },
+  { '__EXT_TC2_UP', '__EXT_TC2_DOWN', 'TC2' }, { 'MGUK_DELIVERY_UP', 'MGUK_DELIVERY_DN', 'MGU-K' },
+  { 'DRS', 'DRS', 'DRS' }, { 'KERS', 'KERS', 'KERS' }, { '__EXT_FFB_RESET', '__EXT_FFB_RESET', 'FFB reset' },
+}
+
+local layout = { map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 }
+for _, s in ipairs(SLOTS) do
+  layout[s.id .. 'fn'], layout[s.id .. 'dev'], layout[s.id .. 'up'], layout[s.id .. 'dn'] = 0, '', s.up or -1, s.dn or -1
+end
+local store = ac.storage(layout)
 local cfg = nil              -- this car's entry in CARS, if it has one
 local carId = ''
 local started, startWait = false, 0
@@ -55,8 +85,13 @@ local mapTimer = 0
 local banks = {}             -- [car] = true once its sound file is loaded
 local status = { sound = '', bank = 1, err = '', note = '' }
 local squeezed = false       -- the engine sound's revs are being scaled down to fit the borrowed sound
+local soundScale = nil       -- when set: sound revs = engine revs x this, written every frame
+local soundRpm = -1          -- what the sound reports its revs as, read back for the log
 local binding, bindTimer, bindSkip = nil, 0, {}
 local held = { map = false, sound = false, rev = false }
+local learn = nil             -- { slot, step, timer, down }: a knob being taught on the Wheel knobs panel
+local turned = {}            -- [slot id] = seconds since it was last turned, for the flash on the panel
+local gameBtn = {}           -- [button] = what the game itself has that button doing
 local soundLimiter = 0       -- the rev limit the engine sound was last set up for
 
 local function hex(h, a)
@@ -98,12 +133,16 @@ local function applyMap()
   mapTimer = 0
 end
 
-local function flipMap()
-  if cfg == nil then return end
-  store.map = clampIndex(store.map, #cfg.maps) % #cfg.maps + 1
+local function setMap(i)
+  if cfg == nil or i == clampIndex(store.map, #cfg.maps) then return end
+  store.map = clampIndex(i, #cfg.maps)
   applyMap()
   resetPeaks()                                          -- the other map has its own curve
   ac.log('Boost and Power: map ' .. cfg.maps[store.map].name)
+end
+
+local function flipMap()
+  if cfg ~= nil then setMap(clampIndex(store.map, #cfg.maps) % #cfg.maps + 1) end
 end
 
 local function applyRev()
@@ -112,12 +151,16 @@ local function applyRev()
   if not ok then fail('rev limit', err) end
 end
 
-local function flipRev()
-  if cfg == nil or cfg.revs == nil then return end
-  store.rev = clampIndex(store.rev, #cfg.revs) % #cfg.revs + 1
+local function setRev(i)
+  if cfg == nil or cfg.revs == nil or i == clampIndex(store.rev, #cfg.revs) then return end
+  store.rev = clampIndex(i, #cfg.revs)
   applyRev()
   resetPeaks()                                          -- the same power now sits at different revs
   ac.log('Boost and Power: rev limit ' .. cfg.revs[store.rev].name)
+end
+
+local function flipRev()
+  if cfg ~= nil and cfg.revs ~= nil then setRev(clampIndex(store.rev, #cfg.revs) % #cfg.revs + 1) end
 end
 
 local function applySound()
@@ -155,35 +198,38 @@ local function applySound()
   -- A sound recorded for fewer revs than this engine turns is fed scaled revs, so it tops out at the limiter
   -- instead of running off the end of its recording. Sounds that reach the limiter by themselves are left alone.
   -- The pitch is raised by the same factor (up to 40%), so the note still climbs with the real revs.
+  -- The scaled revs are written to the sound every frame, in script.update (the patch's remap-table call is broken).
   local top = num(s.top)
   local squeeze = top > 0 and now.limiter > top + 50
   soundLimiter = now.limiter
   if squeeze or squeezed then
-    local out = squeeze and top or 30000
-    local inp = squeeze and now.limiter or 30000
     local pitch = squeeze and math.min(1.4, now.limiter / top) or 1
     local ok, err = pcall(function()
-      local lut = ac.DataLUT11.parse(string.format('(|0=0|%d=%d|60000=%d|)', inp, out, squeeze and out or 60000))
-      ac.CarAudioTweak.setParameterTransform(E.EngineExt, 'rpms', lut)
-      ac.CarAudioTweak.setParameterTransform(E.EngineInt, 'rpms', lut)
       ac.CarAudioTweak.setPitch(E.EngineExt, pitch)
       ac.CarAudioTweak.setPitch(E.EngineInt, pitch)
+      if not squeeze then                               -- hand the revs back to the game
+        ac.CarAudioTweak.setParameter(E.EngineExt, 'rpms', now.rpm, false)
+        ac.CarAudioTweak.setParameter(E.EngineInt, 'rpms', now.rpm, false)
+      end
     end)
-    squeezed = squeeze and ok
-    status.note = ok and (squeeze and string.format('revs scaled to %d pitch %.2f', top, pitch) or '') or ('rev scaling failed: ' .. tostring(err))
+    squeezed = squeeze
+    soundScale = squeeze and top / now.limiter or nil
+    status.note = ok and (squeeze and string.format('revs scaled to %d pitch %.2f', top, pitch) or '') or ('pitch failed: ' .. tostring(err))
     if not ok then ac.log('Boost and Power: ' .. status.note) end
   end
   status.sound = s.name
   ac.log('Boost and Power: sound ' .. s.name)
 end
 
-local function cycleSound()                             -- on-screen click: next sound in the list
+local function stepSound(dir)                           -- next or previous sound in the list, round and round
   if cfg == nil then return end
   local n = #cfg.sounds
   store.prevSound = clampIndex(store.sound, n)
-  store.sound = store.prevSound % n + 1
+  store.sound = (store.prevSound - 1 + dir) % n + 1
   applySound()
 end
+
+local function cycleSound() stepSound(1) end            -- on-screen click
 
 local function flipSound()                              -- wheel button: back and forth between the last two
   if cfg == nil then return end
@@ -209,6 +255,76 @@ local function startBinding(which)                      -- next wheel button pre
       if ac.isJoystickButtonPressed(d, b) then bindSkip[d * 1000 + b] = true end   -- already held: not the one being chosen
     end
   end
+end
+
+local function slotDevice(s)                            -- which controller a knob is on (the wheelbase unless taught otherwise)
+  local name = store[s.id .. 'dev']
+  if name == nil or name == '' then return 0 end
+  return deviceIndex(name)
+end
+
+local function turn(s, dir)                             -- a knob moved one click: dir is 1 (right) or -1 (left)
+  turned[s.id] = 0
+  if cfg == nil then return end
+  local fn, both = num(store[s.id .. 'fn']), num(store[s.id .. 'dn']) >= 0
+  if fn == 1 then
+    if both then setMap(dir > 0 and #cfg.maps or 1) else flipMap() end
+  elseif fn == 2 and cfg.revs ~= nil then
+    if both then setRev(dir > 0 and #cfg.revs or 1) else flipRev() end
+  elseif fn == 3 then
+    stepSound(both and dir or 1)
+  end
+end
+
+local function pollKnobs(dt)
+  for id, age in pairs(turned) do turned[id] = age + dt end
+  if learn ~= nil then                                  -- teaching: the next button to go down is this knob's
+    learn.timer = learn.timer + dt
+    for d = 0, ac.getJoystickCount() - 1 do
+      for b = 0, ac.getJoystickButtonsCount(d) - 1 do
+        local key, down = d * 1000 + b, ac.isJoystickButtonPressed(d, b)
+        if down and not learn.down[key] and learn.ready then
+          local id = learn.slot.id
+          if learn.step == 1 then
+            store[id .. 'dev'], store[id .. 'up'], store[id .. 'dn'] = ac.getJoystickName(d) or '', b, -1
+            learn.step, learn.timer, learn.first = 2, 0, key
+          elseif key ~= learn.first then
+            store[id .. 'dn'] = b
+            learn = nil
+            return
+          end
+        end
+        learn.down[key] = down
+      end
+    end
+    learn.ready = true                                  -- the first pass only notes what is already held
+    if learn.timer > 8 then learn = nil end             -- one button is enough: it then steps one way only
+    return
+  end
+  for _, s in ipairs(SLOTS) do
+    local up, dn = num(store[s.id .. 'up']), num(store[s.id .. 'dn'])
+    if up >= 0 then
+      local d = slotDevice(s)
+      local a = d ~= nil and ac.isJoystickButtonPressed(d, up)
+      local b = d ~= nil and dn >= 0 and ac.isJoystickButtonPressed(d, dn)
+      if a and not s.heldUp then turn(s, 1) end
+      if b and not s.heldDn then turn(s, -1) end
+      s.heldUp, s.heldDn = a, b
+    end
+  end
+end
+
+local function readGameControls()                       -- so the panel can say what the game already does with a button
+  local ok, err = pcall(function()
+    local ini = ac.INIConfig.controlsConfig()
+    for _, g in ipairs(GAME) do
+      for k = 1, 2 do
+        local b = num(ini:get(g[k], 'BUTTON', -1))
+        if b >= 0 and num(ini:get(g[k], 'JOY', -1)) >= 0 then gameBtn[b] = g[3] end
+      end
+    end
+  end)
+  if not ok then ac.log('Boost and Power: could not read the game controls: ' .. tostring(err)) end
 end
 
 local function pollWheel(dt)
@@ -288,6 +404,7 @@ local function start(dt)                                -- once the car and the 
   startWait = startWait + dt
   if startWait < 1.5 then return end
   started = true
+  readGameControls()
   local ok, id = pcall(function() return ac.getCarID(0) end)
   carId = ok and tostring(id) or ''
   cfg = CARS[carId]
@@ -299,8 +416,26 @@ local function start(dt)                                -- once the car and the 
   applySound()
 end
 
+local function feedSound()                              -- every frame while a sound is being stretched
+  local E = ac.CarAudioEventID
+  ac.CarAudioTweak.setParameter(E.EngineExt, 'rpms', now.rpm * soundScale, true)
+  ac.CarAudioTweak.setParameter(E.EngineInt, 'rpms', now.rpm * soundScale, true)
+end
+
 function script.update(dt)
   sample()
+  if soundScale ~= nil then
+    local ok, err = pcall(feedSound)
+    if not ok then
+      soundScale = nil
+      status.note = 'rev scaling failed: ' .. tostring(err)
+      ac.log('Boost and Power: ' .. status.note)
+    end
+  end
+  if started then
+    local ok, err = pcall(pollKnobs, dt)
+    if not ok then fail('wheel knob', err) end
+  end
   if not started then
     local ok, err = pcall(start, dt)
     if not ok then started = true; fail('start', err) end
@@ -324,10 +459,11 @@ function script.update(dt)
     local m = cfg.maps[clampIndex(store.map, #cfg.maps)]
     mapName, level = (m.name:gsub(',', '')), m.level
   end
-  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s,%d',
+  pcall(function() soundRpm = num(ac.CarAudioTweak.getParameter(ac.CarAudioEventID.EngineExt, 'rpms')) end)
+  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s,%d,%.0f',
     seq, now.rpm, now.gas, now.boost, now.tq, now.hp,
     num(car.drivetrainTorque), num(car.drivetrainPower), num(car.turboCount),
-    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' ')), num(store.rev)), true)
+    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' ')), num(store.rev), soundRpm), true)
 end
 
 -- drawing helpers ------------------------------------------------------------
@@ -542,6 +678,75 @@ local function drawSwitches(o, w)
     label(cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name, 12, vec2(px + pw / 2, sy + 4), COL.text, 0.5)
   end
   switchArea('##rigsound', vec2(px, sy), pw, hgt, 'sound', cycleSound)
+end
+
+-- the Wheel knobs panel -------------------------------------------------------
+local function knobValue(fn)                            -- what a knob's job is set to right now
+  if cfg == nil then return '-' end
+  if fn == 1 then return cfg.maps[clampIndex(store.map, #cfg.maps)].name end
+  if fn == 2 then return cfg.revs and cfg.revs[clampIndex(store.rev, #cfg.revs)].name or '-' end
+  if fn == 3 then return cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name end
+  return ''
+end
+
+local function drawSlot(s, c)
+  local id = s.id
+  local fn, up, dn = num(store[id .. 'fn']), num(store[id .. 'up']), num(store[id .. 'dn'])
+  local color = s.color and hex(s.color) or COL.dim
+  local flash = turned[id] ~= nil and turned[id] < 0.35
+  local teaching = learn ~= nil and learn.slot == s
+  local game = gameBtn[up] or gameBtn[dn]
+  local r = s.thumb and 20 or 30
+  if s.thumb then                                       -- a thumb wheel: a small upright pill
+    ui.drawRectFilled(vec2(c.x - 13, c.y - r), vec2(c.x + 13, c.y + r), flash and hex('C3CED8', 0.55) or COL.track, 8)
+    ui.drawRect(vec2(c.x - 13, c.y - r), vec2(c.x + 13, c.y + r), teaching and COL.text or COL.edge, 8, nil, teaching and 2 or 1)
+    for k = -2, 2 do ui.drawLine(vec2(c.x - 8, c.y + k * 6), vec2(c.x + 8, c.y + k * 6), COL.tick, 1) end
+  else                                                  -- a knob: a ring in the colour it glows on the wheel
+    ui.drawCircleFilled(c, r, flash and hex(s.color, 0.45) or COL.track, 40)
+    ui.pathClear()
+    ui.pathArcTo(c, r, 0, math.pi * 2, 48)
+    ui.pathStroke(teaching and COL.text or color, true, teaching and 4 or 3)
+    local value = teaching and (learn.step == 1 and 'turn right' or 'turn left') or (fn > 0 and knobValue(fn) or '')
+    label(value, value:len() > 6 and 10 or 13, vec2(c.x, c.y - (value:len() > 6 and 7 or 9)), COL.text, 0.5)
+  end
+  local y = c.y + r + 5
+  local job = fn > 0 and FNS[fn] or (game or (up >= 0 and 'free' or 'not taught'))
+  if s.thumb and teaching then job = learn.step == 1 and 'turn it up' or 'turn it down' end
+  label(s.thumb and s.name or job, 11, vec2(c.x, y), (fn > 0 or s.thumb) and COL.text or COL.dim, 0.5)
+  if s.thumb then
+    label(fn > 0 and (FNS[fn] .. ' ' .. knobValue(fn)) or job, 9, vec2(c.x, y + 13), fn > 0 and COL.boost or COL.faint, 0.5)
+  else
+    label(fn > 0 and game and ('also ' .. game) or (up >= 0 and (dn >= 0 and string.format('btn %d / %d', up + 1, dn + 1) or string.format('btn %d', up + 1)) or 'right-click to teach'),
+      9, vec2(c.x, y + 13), (fn > 0 and game) and COL.tq or COL.faint, 0.5)
+  end
+  ui.setCursor(vec2(c.x - r - 4, c.y - r - 2))
+  if ui.invisibleButton('##knob' .. id, vec2(r * 2 + 8, r * 2 + 34)) then
+    store[id .. 'fn'] = (fn + 1) % (#FNS + 1)             -- nothing, MAP, REV, SOUND, and round again
+  end
+  if ui.itemClicked(ui.MouseButton.Right) then
+    learn = { slot = s, step = 1, timer = 0, down = {}, ready = false }
+  end
+  if ui.itemHovered() then
+    ui.setTooltip('Click to choose what this does here: nothing, MAP, REV or SOUND.\nRight-click, then turn it one click right and one click left, to teach the panel which control it is.')
+  end
+end
+
+function windowWheel(dt)
+  local o = ui.getCursor()
+  local space = ui.availableSpace()
+  local w, h = space.x, space.y
+  ui.drawRectFilled(o, vec2(o.x + w, o.y + h), COL.panel, 10)
+  ui.drawRect(o, vec2(o.x + w, o.y + h), COL.edge, 10, nil, 1)
+  label('Wheel knobs', 12, vec2(o.x + 16, o.y + 12), COL.dim, 0)
+  label(learn ~= nil and 'teaching: turn the control one click each way' or 'click: choose its job   right-click: teach it', 11,
+    vec2(o.x + w - 16, o.y + 13), learn ~= nil and COL.text or COL.faint, 1)
+  local top, bottom = o.y + 44, o.y + h - 44
+  for _, s in ipairs(SLOTS) do
+    drawSlot(s, vec2(o.x + w * s.x, top + (bottom - top) * s.y))
+  end
+  if cfg == nil then
+    label('MAP, REV and SOUND only act on cars that have them', 11, vec2(o.x + w / 2, o.y + h - 20), COL.faint, 0.5)
+  end
 end
 
 function windowMain(dt)
