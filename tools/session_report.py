@@ -18,7 +18,7 @@ DRIVE_C = Path.home() / "Library/Application Support/CrossOver/Bottles/Steam(try
 SESSIONS = DRIVE_C / "content-manager/Data/Progress/Sessions"
 AC_ROOT = DRIVE_C / "Program Files (x86)/Steam/steamapps/common/assettocorsa"
 # Cars and tracks that get every lap listed, not just a line in the summary.
-FEATURED_CARS = ("ks_ferrari_f2004",)
+FEATURED_CARS = ("ks_ferrari_f2004", "porsche_911_gt2_rs_wss_2000")
 FEATURED_TRACKS = ("ks_nordschleife",)
 BLUE, GREY, ORANGE = "#3987e5", "#8b949e", "#d95926"
 
@@ -44,8 +44,29 @@ def ui_name(kind: str, ident: str) -> str:
         return ident
 
 
+_tyres = {}
+
+
+def tyre_name(car: str, short: str) -> str:
+    """The compound's full name for the short code a saved lap carries ("S" -> "Slick"), from the car's own
+    tyres.ini. Cars whose data is packed keep the code."""
+    if car not in _tyres:
+        names = {}
+        try:
+            text = (AC_ROOT / "content/cars" / car / "data/tyres.ini").read_text(errors="ignore")
+            for body in re.findall(r"^\[FRONT(?:_\d+)?\]([^\[]*)", text, re.M):
+                n, s = re.search(r"^NAME\s*=\s*([^;\r\n]*)", body, re.M), re.search(r"^SHORT_NAME\s*=\s*([^;\r\n]*)", body, re.M)
+                if n and s:
+                    names[s.group(1).strip()] = n.group(1).strip()
+        except OSError:
+            pass
+        _tyres[car] = names
+    name = _tyres[car].get(short, short) if short else ""
+    return name.title() if name.isupper() and len(name) > 3 else name
+
+
 def load(folder: Path):
-    """One row per lap: (track, car, when, session file, lap number, ms, sectors, cuts)."""
+    """One row per lap: (track, car, when, session file, lap number, ms, sectors, cuts, tyre)."""
     rows = []
     for path in sorted(folder.glob("*.json")):
         try:
@@ -58,7 +79,7 @@ def load(folder: Path):
             for lap in s.get("laps", []):
                 if lap.get("car", 0) == 0 and lap.get("time", 0) > 0:
                     rows.append((track, car, when, path.stem, lap.get("lap", 0) + 1, lap["time"],
-                                 [x for x in lap.get("sectors", []) if x > 0], lap.get("cuts", 0)))
+                                 [x for x in lap.get("sectors", []) if x > 0], lap.get("cuts", 0), tyre_name(car, lap.get("tyre", ""))))
     return rows
 
 
@@ -116,24 +137,25 @@ def detail(track, car, laps, out_dir: Path) -> list[str]:
     slug = re.sub(r"[^a-z0-9]+", "-", f"{car}-{track}".lower()).strip("-")
     (out_dir / f"{slug}.svg").write_text(chart(laps, name))
     md = [f"### {name}", "",
-          f"Best lap **{clock(best[5])}** on {best[2]:%Y-%m-%d}."
+          f"Best lap **{clock(best[5])}** on {best[2]:%Y-%m-%d}" + (f", on {best[8]} tyres." if best[8] else ".")
           + (f" Best sectors added together: **{clock(ideal)}**, {(best[5] - ideal) / 1000:.3f} s quicker." if ideal else ""), "",
           f"![Lap times, {name}]({slug}.svg)", ""]
     by_session = defaultdict(list)
     for r in laps:
         by_session[r[3]].append(r)
-    md += ["| Date | Laps | Best | Median clean lap | Spread of clean laps |", "|---|---|---|---|---|"]
+    md += ["| Date | Laps | Tyres | Best | Median clean lap | Spread of clean laps |", "|---|---|---|---|---|---|"]
     for sid, rows in by_session.items():
         clean = sorted(r[5] for r in rows if r[7] == 0 and r[5] < min(x[5] for x in rows) * 1.10)
         med = clock(clean[len(clean) // 2]) if clean else "-"
         spread = f"{(clean[-1] - clean[0]) / 1000:.1f} s" if len(clean) > 1 else "-"
-        md.append(f"| {rows[0][2]:%Y-%m-%d %H:%M} | {len(rows)} | {clock(min(r[5] for r in rows))} | {med} | {spread} |")
+        tyres = ", ".join(dict.fromkeys(r[8] for r in rows if r[8])) or "-"
+        md.append(f"| {rows[0][2]:%Y-%m-%d %H:%M} | {len(rows)} | {tyres} | {clock(min(r[5] for r in rows))} | {med} | {spread} |")
     heads = "".join(f" S{i + 1} |" for i in range(n))
-    md += ["", "<details><summary>Every lap</summary>", "", f"| Date | Lap | Time |{heads} Cuts |", "|---|---|---|" + "---|" * (n + 1)]
+    md += ["", "<details><summary>Every lap</summary>", "", f"| Date | Lap | Time |{heads} Tyres | Cuts |", "|---|---|---|" + "---|" * (n + 2)]
     for r in laps:
         secs = "".join(f" {clock(s) if i < len(r[6]) else '-'} |" for i, s in enumerate(r[6] + [0] * (n - len(r[6]))))
         mark = "**" if r[5] == best[5] else ""
-        md.append(f"| {r[2]:%Y-%m-%d} | {r[4]} | {mark}{clock(r[5])}{mark} |{secs} {r[7] or ''} |")
+        md.append(f"| {r[2]:%Y-%m-%d} | {r[4]} | {mark}{clock(r[5])}{mark} |{secs} {r[8]} | {r[7] or ''} |")
     md += ["", "</details>", ""]
     return md
 
@@ -157,17 +179,18 @@ def main():
           "Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; "
           "the first lap of a session starts from the pits, so it is always slow.", ""]
     featured = [(k, v) for k, v in groups.items() if k[1] in FEATURED_CARS or k[0].split("-")[0] in FEATURED_TRACKS]
-    for title, pick in (("Ferrari F2004", lambda k: k[1] in FEATURED_CARS),
+    for title, pick in (("Ferrari F2004", lambda k: k[1] == "ks_ferrari_f2004"),
+                        ("Porsche 911 GT2 RS track build", lambda k: k[1] == "porsche_911_gt2_rs_wss_2000"),
                         ("Nürburgring Nordschleife, other cars", lambda k: k[1] not in FEATURED_CARS)):
         chosen = sorted(((k, v) for k, v in featured if pick(k)), key=lambda kv: -len(kv[1]))
         if chosen:
             md += [f"## {title}", ""]
             for (track, car), laps in chosen:
                 md += detail(track, car, laps, a.out)
-    md += ["## Every car and track", "", "| Track | Car | Sessions | Laps | Best | Best sectors together | Last driven |", "|---|---|---|---|---|---|---|"]
+    md += ["## Every car and track", "", "| Track | Car | Sessions | Laps | Best | On tyres | Best sectors together | Last driven |", "|---|---|---|---|---|---|---|---|"]
     for (track, car), laps in sorted(groups.items(), key=lambda kv: (ui_name("track", kv[0][0]), min(r[5] for r in kv[1]))):
         best, ideal, _ = summary(laps)
-        md.append(f"| {ui_name('track', track)} | {ui_name('car', car)} | {len({r[3] for r in laps})} | {len(laps)} | {clock(best[5])} | "
+        md.append(f"| {ui_name('track', track)} | {ui_name('car', car)} | {len({r[3] for r in laps})} | {len(laps)} | {clock(best[5])} | {best[8] or '-'} | "
                   f"{clock(ideal) if ideal else '-'} | {max(r[2] for r in laps):%Y-%m-%d} |")
     (a.out / "README.md").write_text("\n".join(md) + "\n")
     print(f"lap log: {len(rows)} laps, {len(groups)} car and track pairs, {len(featured)} with full detail -> {a.out}")
