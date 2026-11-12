@@ -963,7 +963,11 @@ local function revCounter(c, r, s)
   centred(gearText, gs, c, -gs * 0.82, K.white)
   centred(thousands(math.floor(now.rpm / 10 + 0.5) * 10), 15 * s, c, gs * 0.20, zone)
   if store.clusterLayout == 2 then
-    centred(string.format('%.0f mph', now.mph), 17 * s, c, gs * 0.20 + 18 * s, K.white)
+    local speed, big, tiny = string.format('%.0f', now.mph), 19 * s, 8 * s      -- the figure, with its unit kept very small
+    local wn, wu = ui.measureDWriteText(speed, big).x, ui.measureDWriteText('mph', tiny).x
+    local x, y = c.x - (wn + 3 * s + wu) / 2, c.y + gs * 0.20 + 17 * s
+    ui.dwriteDrawText(speed, big, vec2(x, y), K.white)
+    ui.dwriteDrawText('mph', tiny, vec2(x + wn + 3 * s, y + (big - tiny) * 0.80), K.dimw)
   else
     centred(string.format('%.1f psi', psi), 12 * s, c, gs * 0.20 + 19 * s, K.teal)
   end
