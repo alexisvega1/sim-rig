@@ -49,7 +49,8 @@ local bins = {}              -- [rpm/100] = best full-throttle torque (lb-ft) se
 local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0, mph = 0, gx = 0, gz = 0, brake = 0, steer = 0 }
 local acc, seq = 0, 0
 -- g-force as the cluster shows it: smoothed values, a short trail, and the most seen in each direction
-local G = { x = 0, z = 0, trail = {}, timer = 0, up = 0, down = 0, left = 0, right = 0 }
+local G = { x = 0, z = 0, trail = {}, timer = 0, up = 0, down = 0, left = 0, right = 0, quiet = 0, all = 0 }
+local gBest = nil            -- the most g this car has ever shown each way, kept between sessions
 
 -- The wheel's turning controls, laid out as on a MOZA KS Pro: four thumb wheels and five knobs. x and y place each
 -- on the Wheel knobs panel (0..1). up and dn are the buttons one click right and left sends; the thumb wheels start
@@ -122,6 +123,22 @@ local function resetPeaks()
 end
 
 local function resetG() G.up, G.down, G.left, G.right = 0, 0, 0, 0 end
+
+-- The all-time figures are kept per car: a Formula 1 car's 5 g should not sit on a road car's clock.
+local function bestG()
+  if gBest == nil and carId ~= '' then
+    gBest = ac.storage({ up = 0, down = 0, left = 0, right = 0 }, 'g_' .. carId .. '_')
+  end
+  return gBest
+end
+
+local function resetBestG()
+  local b = bestG()
+  if b ~= nil then b.up, b.down, b.left, b.right = 0, 0, 0, 0 end
+end
+
+-- A new session, or the same one started again ("Try again"): the session's own figures start from nothing.
+pcall(function() ac.onSessionStart(function() resetG() end) end)
 
 -- the switches ---------------------------------------------------------------
 local function fail(what, err)
@@ -1118,7 +1135,8 @@ end
 
 -- The small clock on the right: g-force. The dot shows the force on the driver: it moves up under braking, down
 -- under power, and to the outside of a corner. Rings at 1 and 2 g, the outer ring is 3 g; a short trail follows the
--- dot. The four figures are the most seen in each direction since they were last cleared (a click clears them).
+-- dot. The four figures round the edge are the most seen in each direction in this session; they start again with
+-- every new session. A click shows the car's all-time figures in their place for a few seconds.
 local function gForce(c, r, s, dt)
   ui.drawCircleFilled(c, r, K.face, 48)
   ui.drawCircle(c, r - 5 * s, stage() == 1 and K.ring or K.red, 48, 1.5 * s)
@@ -1131,10 +1149,23 @@ local function gForce(c, r, s, dt)
   ui.drawLine(vec2(c.x, c.y - reach), vec2(c.x, c.y + reach), K.off, 1)
   local k = math.min(1, (dt or 0.016) * 12)                  -- a little smoothing so the dot does not jitter
   G.x, G.z = G.x + (now.gx - G.x) * k, G.z + (now.gz - G.z) * k
-  if now.mph > 10 and math.abs(G.x) < 6 and math.abs(G.z) < 6 then        -- moving, and not a crash
+  local step = dt or 0.016
+  if math.abs(now.gx) > 6 or math.abs(now.gz) > 6 then G.quiet = 1.5 end   -- an impact: nothing counts until it has died away
+  G.quiet = math.max(0, G.quiet - step)
+  local best = bestG()
+  if now.mph > 10 and G.quiet <= 0 and math.abs(G.x) < 6 and math.abs(G.z) < 6 then        -- moving, and not a crash
     G.left, G.right = math.max(G.left, -G.x), math.max(G.right, G.x)
     G.up, G.down = math.max(G.up, -G.z), math.max(G.down, G.z)
+    if best ~= nil then                                     -- written only when a record falls
+      if G.up > best.up then best.up = G.up end
+      if G.down > best.down then best.down = G.down end
+      if G.left > best.left then best.left = G.left end
+      if G.right > best.right then best.right = G.right end
+    end
   end
+  G.all = math.max(0, G.all - step)
+  local showAll = G.all > 0 and best ~= nil
+  local m, tint = showAll and best or G, showAll and K.white or K.dimw
   local function spot(gx, gz)
     local m = math.sqrt(gx * gx + gz * gz)
     local f = m > 3 and 3 / m or 1                           -- held at the outer ring beyond 3 g
@@ -1155,14 +1186,18 @@ local function gForce(c, r, s, dt)
   centred(text, nowSize, vec2(c.x + 1 * s, c.y + 1 * s), r * 0.06, hex('07090B', 0.9))   -- a dark edge keeps it readable over the red
   centred(text, nowSize, c, r * 0.06, K.white)
   local size = math.max(9, r * 0.14)                        -- the most seen each way, smaller and dimmer than the live figure
-  centred(string.format('%.1f', G.up), size, vec2(c.x, c.y - r + 8 * s), 0, K.dimw)
-  centred(string.format('%.1f', G.down), size, vec2(c.x, c.y + r - 9 * s - size * 1.15), 0, K.dimw)
-  ui.dwriteDrawText(string.format('%.1f', G.left), size, vec2(c.x - r + 9 * s, c.y - size * 0.6), K.dimw)
-  local w = ui.measureDWriteText(string.format('%.1f', G.right), size).x
-  ui.dwriteDrawText(string.format('%.1f', G.right), size, vec2(c.x + r - 9 * s - w, c.y - size * 0.6), K.dimw)
+  centred(string.format('%.1f', m.up), size, vec2(c.x, c.y - r + 8 * s), 0, tint)
+  centred(string.format('%.1f', m.down), size, vec2(c.x, c.y + r - 9 * s - size * 1.15), 0, tint)
+  ui.dwriteDrawText(string.format('%.1f', m.left), size, vec2(c.x - r + 9 * s, c.y - size * 0.6), tint)
+  local w = ui.measureDWriteText(string.format('%.1f', m.right), size).x
+  ui.dwriteDrawText(string.format('%.1f', m.right), size, vec2(c.x + r - 9 * s - w, c.y - size * 0.6), tint)
+  if showAll then                                           -- says which figures these are, just above the live one
+    local cap = math.max(8, r * 0.105)
+    centred('ALL-TIME', cap, c, -cap * 1.45, K.white)
+  end
   ui.setCursor(vec2(c.x - reach, c.y - reach))
-  if ui.invisibleButton('##clg', vec2(reach * 2, reach * 2)) then resetG() end
-  if ui.itemHovered() then ui.setTooltip('The large figure is the g being pulled now. Round the edge: the most seen braking (top), under power (bottom) and cornering each way. Click to clear those.') end
+  if ui.invisibleButton('##clg', vec2(reach * 2, reach * 2)) then G.all = G.all > 0 and 0 or 6 end
+  if ui.itemHovered() then ui.setTooltip('The large figure is the g being pulled now. Round the edge: the most seen this session braking (top), under power (bottom) and cornering each way. They start again with each new session. Click to see the all-time figures for this car for a few seconds.') end
 end
 
 -- The cluster's settings (the cog on its title bar): which arrangement of the clocks to show.
@@ -1174,6 +1209,10 @@ function windowClusterSettings(dt)
   if ui.radioButton('Track map beside the rev counter, all the power in one clock', now3 == 3) then store.clusterLayout = 3 end
   ui.text('Clicking the gear figure in the rev counter also steps through them.')
   ui.text('Clicking the track map switches between the road ahead and the whole circuit.')
+  ui.text('Clicking the g clock shows the all-time figures for this car for a few seconds.')
+  if ui.button('Clear this session\'s g figures', vec2(210, 22)) then resetG() end
+  ui.sameLine(0, 8)
+  if ui.button('Clear the all-time g figures', vec2(200, 22)) then resetBestG() end
 end
 
 function windowCluster(dt)

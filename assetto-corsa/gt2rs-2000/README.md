@@ -40,10 +40,18 @@ What the recorded laps showed along the way:
 - `tune.py` also renames the car in the game's menus to "2500hp MONSTER" with matching figures. The folder name keeps
   its `_2000`, because setups, saved laps and the sound file are all tied to it.
 
-- Traction package (not yet driven): all-wheel drive with 35% of the torque to the front through a centre differential
+- Traction package: all-wheel drive with 35% of the torque to the front through a centre differential
   that locks under power; boost by gear (55%, 70%, 85% and 95% of the wastegate in 1st to 4th, full from 5th), done by
   the script in the car; 7th lengthened again (0.55 to 0.50); and 35% more front downforce. `--rwd` and `--flat-boost`
-  leave the first two out.
+  leave the first two out. First results: Road America 1:50.199 against 1:54.338 with rear drive (4.1 s), with the
+  pull below 120 mph at full throttle up from 0.93 g to 1.14 g. The front tyres now run 15 to 20 °C hotter than
+  before, and the share of the load on the front axle above 200 mph went from about 0.27 to 0.34.
+- Downshift guard: the same script refuses a pull on the downshift paddle while the lower gear would take the engine
+  more than 300 rpm past the limit at the speed the car is doing. It exists because of a blown engine: on the
+  Nordschleife a burst of six downshifts in 1.3 s, 7th to 1st from 187 mph, spun the engine to 22,700 rpm. The car's
+  `[DOWNSHIFT_PROTECTION]` was on and let it through, as it had let 39 smaller over-revs through in the same session.
+  `tools/downshift_guard_test.lua` replays that burst against the script outside the game. Whether the game honours
+  the refusal has not yet been confirmed on track.
 
 The brake pedal change is in the game's own `cfg/controls.ini`: `[BRAKES] MAX=0.88`, because a stiff brake spring
 kept the pedal from ever reading 100%.

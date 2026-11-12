@@ -225,7 +225,8 @@ def layout_of(track: str) -> str:
     race = re.search(r"^\[RACE\][^\[]*", text, re.M)
     if not race:
         return ""
-    find = lambda key: (re.search(r"^%s\s*=\s*([^;\r\n]*)" % key, race.group(0), re.M) or [None, ""])[1].strip()
+    # [ \t]* and not \s*: an empty value ("CONFIG_TRACK=") must not run on into the next line
+    find = lambda key: (re.search(r"^%s[ \t]*=[ \t]*([^;\r\n]*)" % key, race.group(0), re.M) or [None, ""])[1].strip()
     return find("CONFIG_TRACK") if find("TRACK") == track else ""
 
 

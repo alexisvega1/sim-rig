@@ -1,6 +1,6 @@
 # Lap log
 
-276 laps in 71 sessions, 2026-09-12 to 2026-11-12. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session is always slow: the game starts its clock on the grid slot, some way before the line, so that lap is a standing start plus the run-up. The control board times first laps from the line instead.
+282 laps in 73 sessions, 2026-09-12 to 2026-11-12. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session is always slow: the game starts its clock on the grid slot, some way before the line, so that lap is a standing start plus the run-up. The control board times first laps from the line instead.
 
 ## Ferrari F2004
 
@@ -86,7 +86,7 @@ Best lap **6:12.590** on 2026-09-20, on M tyres. Best sectors added together: **
 
 ### Porsche 911 GT2 RS / 2500hp MONSTER at Road America
 
-Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together: **1:53.374**, 0.964 s quicker.
+Best lap **1:50.199** on 2026-11-12, on Slick tyres. Best sectors added together: **1:49.879**, 0.320 s quicker.
 
 ![Lap times, Porsche 911 GT2 RS / 2500hp MONSTER at Road America](porsche-911-gt2-rs-wss-2000-lilski-road-america.svg)
 
@@ -104,6 +104,7 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 | 2026-11-12 00:03 | 2 | Slick | 2:52.800 | 2:52.800 | - |
 | 2026-11-12 00:22 | 1 | Slick | 3:23.383 | 3:23.383 | - |
 | 2026-11-12 00:40 | 3 | Slick | 1:57.546 | 2:03.556 | 6.0 s |
+| 2026-11-12 01:55 | 4 | Slick | 1:50.199 | 1:53.067 | 9.3 s |
 
 <details><summary>Every lap</summary>
 
@@ -140,7 +141,7 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 | 2026-11-11 | 2 | 2:01.001 | 0:43.327 | 0:45.175 | 0:32.499 | Slick |  |
 | 2026-11-11 | 3 | 2:06.768 | 0:43.049 | 0:48.407 | 0:35.312 | Slick |  |
 | 2026-11-11 | 4 | 2:05.684 | 0:42.529 | 0:51.061 | 0:32.094 | Slick |  |
-| 2026-11-11 | 5 | **1:54.338** | 0:38.905 | 0:43.934 | 0:31.499 | Slick |  |
+| 2026-11-11 | 5 | 1:54.338 | 0:38.905 | 0:43.934 | 0:31.499 | Slick |  |
 | 2026-11-11 | 1 | 4:08.978 | 1:45.176 | 1:44.436 | 0:39.366 | Slick |  |
 | 2026-11-11 | 1 | 7:11.695 | 3:22.028 | 2:41.775 | 1:07.892 | Slick |  |
 | 2026-11-12 | 1 | 3:45.987 | 1:52.308 | 0:59.953 | 0:53.726 | Slick |  |
@@ -149,24 +150,31 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 | 2026-11-12 | 1 | 2:21.508 | 1:04.383 | 0:44.590 | 0:32.535 | Slick |  |
 | 2026-11-12 | 2 | 1:57.546 | 0:42.729 | 0:42.970 | 0:31.847 | Slick |  |
 | 2026-11-12 | 3 | 2:03.556 | 0:44.144 | 0:44.235 | 0:35.177 | Slick |  |
+| 2026-11-12 | 1 | 2:26.481 | 1:03.838 | 0:52.547 | 0:30.096 | Slick |  |
+| 2026-11-12 | 2 | 1:59.456 | 0:44.063 | 0:42.994 | 0:32.399 | Slick |  |
+| 2026-11-12 | 3 | **1:50.199** | 0:38.433 | 0:41.570 | 0:30.196 | Slick |  |
+| 2026-11-12 | 4 | 1:53.067 | 0:40.968 | 0:41.350 | 0:30.749 | Slick |  |
 
 </details>
 
 ### Porsche 911 GT2 RS / 2500hp MONSTER at Nordschleife
 
-Best lap **6:58.514** on 2026-11-12, on Slick tyres. Best sectors added together: **6:58.514**, 0.000 s quicker.
+Best lap **6:39.251** on 2026-11-12, on Slick tyres. Best sectors added together: **6:37.433**, 1.818 s quicker.
 
 ![Lap times, Porsche 911 GT2 RS / 2500hp MONSTER at Nordschleife](porsche-911-gt2-rs-wss-2000-ks-nordschleife-nordschleife.svg)
 
 | Date | Laps | Tyres | Best | Median clean lap | Spread of clean laps |
 |---|---|---|---|---|---|
 | 2026-11-12 00:56 | 1 | Slick | 6:58.514 | 6:58.514 | - |
+| 2026-11-12 01:44 | 2 | Slick | 6:39.251 | 6:39.251 | - |
 
 <details><summary>Every lap</summary>
 
 | Date | Lap | Time | S1 | S2 | S3 | Tyres | Cuts |
 |---|---|---|---|---|---|---|---|
-| 2026-11-12 | 1 | **6:58.514** | 2:09.754 | 2:11.791 | 2:36.969 | Slick |  |
+| 2026-11-12 | 1 | 6:58.514 | 2:09.754 | 2:11.791 | 2:36.969 | Slick |  |
+| 2026-11-12 | 1 | 7:55.667 | 2:54.973 | 2:21.822 | 2:38.872 | Slick |  |
+| 2026-11-12 | 2 | **6:39.251** | 1:55.180 | 2:05.284 | 2:38.787 | Slick |  |
 
 </details>
 
@@ -248,13 +256,13 @@ Best lap **6:59.801** on 2026-10-09, on Toyo R888R tyres. Best sectors added tog
 | Circuit of The Americas 2021 | Porsche 911 Carrera RSR 3.0 | 1 | 1 | 3:53.025 | V70 | 3:53.025 | 2026-09-13 |
 | LAC - Freeroam | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 2 | 2 | 0:00.002 | Toyo R888R | - | 2026-09-12 |
 | Nordschleife | Ferrari F2004 | 4 | 8 | 6:12.590 | M | 6:02.406 | 2026-09-30 |
-| Nordschleife | Porsche 911 GT2 RS / 2500hp MONSTER | 1 | 1 | 6:58.514 | Slick | 6:58.514 | 2026-11-12 |
+| Nordschleife | Porsche 911 GT2 RS / 2500hp MONSTER | 2 | 3 | 6:39.251 | Slick | 6:37.433 | 2026-11-12 |
 | Nordschleife | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 1 | 2 | 6:59.801 | Toyo R888R | 6:59.801 | 2026-10-09 |
 | Nordschleife | Brabus 900 Rocket R - Porsche 911 Turbo / No Hesi Spec | 1 | 2 | 7:25.405 | Toyo R888R | 7:22.737 | 2026-09-13 |
 | Nordschleife | Porsche Carrera GT | 1 | 3 | 8:20.131 | Hypercar road | 8:20.131 | 2026-09-13 |
 | PCH - Southbound | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 1 | 1 | 11:29.542 | Toyo R888R | - | 2026-09-12 |
 | Road America | Ferrari F2004 | 4 | 30 | 1:43.726 | M | 1:42.349 | 2026-11-11 |
-| Road America | Porsche 911 GT2 RS / 2500hp MONSTER | 12 | 40 | 1:54.338 | Slick | 1:53.374 | 2026-11-12 |
+| Road America | Porsche 911 GT2 RS / 2500hp MONSTER | 13 | 44 | 1:50.199 | Slick | 1:49.879 | 2026-11-12 |
 | Road America | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 5 | 40 | 2:02.617 | Toyo R888R | 2:01.908 | 2026-09-25 |
 | Road America | Ferrari F138 | 1 | 5 | 2:07.539 | M | 1:56.999 | 2026-09-15 |
 | Road America | Ferrari FXX K | 1 | 5 | 2:10.376 | M | 2:09.726 | 2026-09-16 |

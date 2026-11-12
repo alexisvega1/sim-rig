@@ -172,13 +172,23 @@ def gearbox(t: str) -> str:
 STOCK_LIMITER = 7200
 
 
+def gear_ratios(data: Path) -> list[str]:
+    """The forward gear ratios the car will have once tuned, as written in drivetrain.ini."""
+    t = gearbox((data / "drivetrain.ini").read_bytes().decode("utf-8", "surrogateescape"))
+    found = dict(re.findall(r"^GEAR_(\d+)\s*=\s*([0-9.]+)", t, re.M))
+    return [found[str(n)] for n in range(1, len(found) + 1)]
+
+
 SWITCH = "F"            # the Custom Shaders Patch extra switch that selects the high rev limit
 
-SCRIPT = """-- Written by tune.py. Two jobs, done on every physics step:
+SCRIPT = """-- Written by tune.py. Three jobs, done on every physics step:
 --   1. Rev limit. Extra switch %(switch)s off: %(low)d rpm. On: %(high)d rpm, with the final drive shortened by the
 --      same factor, so the speed reached in each gear does not change.
 --   2. Boost by gear. Each turbo's wastegate is %(wastegate)s bar times the share for the gear the car is in, so
 --      the low gears get less boost than the tyres would only spin away. The driver's map setting still applies on top.
+--   3. Downshift guard. A pull on the downshift paddle is refused while the lower gear would spin the engine more
+--      than %(over)d rpm past the limit at the speed the car is doing. Pull again once the car has slowed. The game's own
+--      protection let a 7th-to-1st burst through at 187 mph, which took the engine to 22,700 rpm and destroyed it.
 if car.isAIControlled then
   return nil
 end
@@ -186,7 +196,33 @@ end
 local LOW, HIGH, FINAL = %(low)d, %(high)d, %(final)s
 local WASTEGATE = %(wastegate)s
 local SHARE = { %(shares)s }                -- by gear: 1st, 2nd, ... (gears beyond the list get full boost)
+local RATIO = { %(ratios)s }      -- forward gears, from drivetrain.ini
+local OVER = %(over)d
 local mode, share, timer = -1, -1, 0
+local limit, final = LOW, FINAL
+local was, refused = false, false           -- the paddle on the last step; whether this pull has been refused
+local target, hold = 0, 0                   -- the gear a shift in progress is heading for, and how long to trust that
+
+-- Engine speed the given gear would give at the road speed the car is doing now.
+local function revsIn(gear)
+  local radius = car.wheels[2].tyreRadius
+  if not radius or radius < 0.1 then radius = 0.35 end
+  return car.speedKmh / 3.6 / radius * 9.5493 * RATIO[gear] * final
+end
+
+local function guard(phys, gear, dt)
+  hold = hold - dt
+  if hold > 0 and target >= 1 and target < gear then gear = target end   -- mid-shift: count from where it is going
+  local down = phys.gearDown
+  if down and not was then
+    refused = gear >= 2 and revsIn(gear - 1) > limit + OVER
+    if not refused and gear >= 2 then target, hold = gear - 1, 0.35 end
+  elseif not down then
+    refused = false
+  end
+  was = down
+  if refused then phys.gearDown = false end
+end
 
 function script.update(dt)
   timer = timer + dt
@@ -196,12 +232,15 @@ function script.update(dt)
     local want = car.extra%(switch)s and 1 or 0
     if want ~= mode or again then
       mode = want
-      local limit = want == 1 and HIGH or LOW
+      limit = want == 1 and HIGH or LOW
+      final = FINAL * limit / LOW
       ac.setEngineRPMLimit(limit, true)
-      ac.setGearsFinalRatio(FINAL * limit / LOW)
+      ac.setGearsFinalRatio(final)
     end
   end
-  local gear = ac.accessCarPhysics().gear - 1   -- 0 is reverse and 1 neutral in the physics, so 1st becomes 1
+  local phys = ac.accessCarPhysics()
+  local gear = phys.gear - 1                    -- 0 is reverse and 1 neutral in the physics, so 1st becomes 1
+  guard(phys, gear, dt)
   local now = SHARE[gear] or 1
   if now ~= share or again then
     share = now
@@ -339,7 +378,7 @@ def main():
     shares = "1, 1, 1, 1" if a.flat_boost else "0.55, 0.70, 0.85, 0.95"
     if high or not a.flat_boost:
         car.write("script.lua", SCRIPT % dict(switch=SWITCH, low=a.redline, high=high or a.redline, final=round(4.09 * k, 3),
-                                              wastegate="2.973", shares=shares))
+                                              wastegate="2.973", shares=shares, ratios=", ".join(gear_ratios(a.data)), over=300))
     elif (a.data / "script.lua").exists() and "ritten by tune.py" in (a.data / "script.lua").read_text():
         car.park("script.lua")
     if describe(a.data, k, high, a.dry_run, not a.rwd):

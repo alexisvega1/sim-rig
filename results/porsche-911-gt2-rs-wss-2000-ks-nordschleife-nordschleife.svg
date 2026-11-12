@@ -2,19 +2,23 @@
 <title>Porsche 911 GT2 RS / 2500hp MONSTER at Nordschleife</title>
 <text x="62" y="16" fill="#8b949e" font-size="12">Porsche 911 GT2 RS / 2500hp MONSTER at Nordschleife: every lap in the order driven</text>
 <line x1="62" x2="744" y1="216.0" y2="216.0" stroke="#8b949e" stroke-opacity="0.25"/>
-<text x="56" y="220.0" fill="#8b949e" text-anchor="end">6:55.1</text>
+<text x="56" y="220.0" fill="#8b949e" text-anchor="end">6:36.0</text>
 <line x1="62" x2="744" y1="169.5" y2="169.5" stroke="#8b949e" stroke-opacity="0.25"/>
-<text x="56" y="173.5" fill="#8b949e" text-anchor="end">7:06.4</text>
+<text x="56" y="173.5" fill="#8b949e" text-anchor="end">6:46.8</text>
 <line x1="62" x2="744" y1="123.0" y2="123.0" stroke="#8b949e" stroke-opacity="0.25"/>
-<text x="56" y="127.0" fill="#8b949e" text-anchor="end">7:17.7</text>
+<text x="56" y="127.0" fill="#8b949e" text-anchor="end">6:57.6</text>
 <line x1="62" x2="744" y1="76.5" y2="76.5" stroke="#8b949e" stroke-opacity="0.25"/>
-<text x="56" y="80.5" fill="#8b949e" text-anchor="end">7:29.0</text>
+<text x="56" y="80.5" fill="#8b949e" text-anchor="end">7:08.3</text>
 <line x1="62" x2="744" y1="30.0" y2="30.0" stroke="#8b949e" stroke-opacity="0.25"/>
-<text x="56" y="34.0" fill="#8b949e" text-anchor="end">7:40.3</text>
+<text x="56" y="34.0" fill="#8b949e" text-anchor="end">7:19.1</text>
+<text x="172.7" y="230" fill="#8b949e">Nov 12</text>
+<line x1="289.3" x2="289.3" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
 <text x="400.0" y="230" fill="#8b949e">Nov 12</text>
 <line x1="62" x2="744" y1="202.2" y2="202.2" stroke="#d95926" stroke-dasharray="4 3"/>
-<text x="744" y="216.2" fill="#d95926" text-anchor="end">best 6:58.514</text>
-<polyline points="403.0,202.2" fill="none" stroke="#3987e5" stroke-opacity="0.45" stroke-width="1.5"/>
-<circle cx="403.0" cy="202.2" r="5" fill="#d95926"><title>2026-11-12 lap 1: 6:58.514</title></circle>
+<text x="744" y="216.2" fill="#d95926" text-anchor="end">best 6:39.251</text>
+<polyline points="175.7,119.1 403.0,30.0 630.3,202.2" fill="none" stroke="#3987e5" stroke-opacity="0.45" stroke-width="1.5"/>
+<circle cx="175.7" cy="119.1" r="3.5" fill="#3987e5"><title>2026-11-12 lap 1: 6:58.514</title></circle>
+<path d="M399.0,37 L407.0,37 L403.0,30 Z" fill="#8b949e"><title>2026-11-12 lap 1: 7:55.667</title></path>
+<circle cx="630.3" cy="202.2" r="5" fill="#d95926"><title>2026-11-12 lap 2: 6:39.251</title></circle>
 <text x="62" y="246" fill="#8b949e">filled: clean lap    ring: lap with a cut    triangle: more than 10% off the best</text>
 </svg>

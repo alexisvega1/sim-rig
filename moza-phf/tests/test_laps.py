@@ -179,6 +179,9 @@ def test_save_index_and_load(three_laps):
     old, laprec.RACE_INI = laprec.RACE_INI, ini
     try:
         assert laprec.layout_of("ks_nordschleife") == "nordschleife" and laprec.layout_of("some_other_track") == ""
+        # a track with no layouts has an empty value there, which must not pick up the next line
+        ini.write_text("[RACE]\r\nMODEL=car_a\r\nTRACK=lilski_road_america\r\nCONFIG_TRACK=\r\nAI_LEVEL=100\r\n")
+        assert laprec.layout_of("lilski_road_america") == ""
     finally:
         laprec.RACE_INI = old
 
