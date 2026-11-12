@@ -1,6 +1,6 @@
 # Lap log
 
-262 laps in 64 sessions, 2026-09-12 to 2026-11-11. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
+267 laps in 65 sessions, 2026-09-12 to 2026-11-11. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
 
 ## Ferrari F2004
 
@@ -165,7 +165,7 @@ Best lap **6:59.801** on 2026-10-09. Best sectors added together: **6:59.801**, 
 | Nordschleife | Porsche Carrera GT | 1 | 3 | 8:20.131 | 8:20.131 | 2026-09-13 |
 | PCH - Southbound | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 1 | 1 | 11:29.542 | - | 2026-09-12 |
 | Road America | Ferrari F2004 | 4 | 30 | 1:43.726 | 1:42.349 | 2026-11-11 |
-| Road America | Porsche 911 GT2 RS / 2000hp MONSTER | 6 | 27 | 2:00.510 | 1:54.737 | 2026-11-11 |
+| Road America | Porsche 911 GT2 RS / 2000hp MONSTER | 7 | 32 | 1:54.338 | 1:53.441 | 2026-11-11 |
 | Road America | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 5 | 40 | 2:02.617 | 2:01.908 | 2026-09-25 |
 | Road America | Ferrari F138 | 1 | 5 | 2:07.539 | 1:56.999 | 2026-09-15 |
 | Road America | Ferrari FXX K | 1 | 5 | 2:10.376 | 2:09.726 | 2026-09-16 |
