@@ -5,7 +5,7 @@ local out = {}
 local function css(c) return string.format('rgba(%d,%d,%d,%.2f)', math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5), c[4] or 1) end
 vec2 = function(x, y) return { x = x, y = y } end
 rgbm = function(r, g, b, a) return { r, g, b, a } end
-local car = { rpm = RPM or 10400, turboBoost = 4.71, gas = 1, gear = 5, rpmLimiter = LIMIT or 12000, drivetrainTorque = 0, drivetrainPower = 0, turboCount = 2, speedKmh = 372, turboWastegates = { [0] = 0.8, [1] = 0.8 } }
+local car = { rpm = RPM or 10400, turboBoost = 4.71, gas = 1, gear = 5, rpmLimiter = LIMIT or 12000, drivetrainTorque = 0, drivetrainPower = 0, turboCount = 2, speedKmh = 372, acceleration = { x = 1.6, y = 0, z = -1.9 }, brake = 0.8, steer = 40, turboWastegates = { [0] = 0.8, [1] = 0.8 } }
 local stored = { map = 2, sound = 6, rev = 2, graphOnly = GRAPH or false }
 local path = {}
 ac = {
@@ -24,6 +24,7 @@ ui = setmetatable({
   measureDWriteText = function(t, s) return vec2(#tostring(t) * s * 0.56, s * 1.2) end,
   dwriteDrawText = function(t, s, p, c) out[#out + 1] = string.format('<text x="%.1f" y="%.1f" font-size="%.1f" fill="%s" font-family="Helvetica, Arial" font-weight="600">%s</text>', p.x, p.y + s * 0.92, s, css(c), tostring(t):gsub('&', '&amp;')) end,
   drawCircleFilled = function(c, r, col) out[#out + 1] = string.format('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>', c.x, c.y, r, css(col)) end,
+  drawCircle = function(c, r, col, seg, th) out[#out + 1] = string.format('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" stroke="%s" stroke-width="%.1f"/>', c.x, c.y, r, css(col), th or 1) end,
   drawLine = function(a, b, col, th) out[#out + 1] = string.format('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="%.1f"/>', a.x, a.y, b.x, b.y, css(col), th or 1) end,
   drawRect = function(a, b, col, round, _, th) out[#out + 1] = string.format('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" fill="none" stroke="%s" stroke-width="%.1f"/>', a.x, a.y, b.x - a.x, b.y - a.y, round or 0, css(col), th or 1) end,
   drawRectFilled = function(a, b, col, round) out[#out + 1] = string.format('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" fill="%s"/>', a.x, a.y, b.x - a.x, b.y - a.y, round or 0, css(col)) end,
@@ -42,7 +43,7 @@ car.turboBoost = 4.71
 car.rpm = RPM or 10400
 for i = 1, 3 do script.update(0.1) end
 out = {}
-_G[arg[2]](0.016)
+for i = 1, 30 do out = {}; car.acceleration.x = 1.6 - i * 0.02; car.acceleration.z = -1.9 + i * 0.03; script.update(0.03); _G[arg[2]](0.03) end
 local f = io.open(arg[3], 'w')
 f:write(string.format('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d"><rect width="%d" height="%d" fill="#6c7f86"/><rect y="%d" width="%d" height="%d" fill="#3c4347"/>', W, H, W, H, math.floor(H * 0.55), W, math.floor(H * 0.45)))
 f:write(table.concat(out, '\n')); f:write('</svg>'); f:close()

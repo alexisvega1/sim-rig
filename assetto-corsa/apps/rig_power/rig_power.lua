@@ -46,7 +46,7 @@ local curve = nil            -- the car's torque curve without boost
 local curveTried = false
 local peak = { boost = 0, hp = 0, tq = 0, hpRpm = 0, tqRpm = 0 }
 local bins = {}              -- [rpm/100] = best full-throttle torque (lb-ft) seen there
-local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0, mph = 0 }
+local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0, mph = 0, gx = 0, gz = 0, brake = 0, steer = 0 }
 local acc, seq = 0, 0
 
 -- The wheel's turning controls, laid out as on a MOZA KS Pro: four thumb wheels and five knobs. x and y place each
@@ -380,6 +380,8 @@ local function sample()
   now.rpm, now.boost, now.gas = num(car.rpm), math.max(0, num(car.turboBoost)), num(car.gas)
   now.gear = num(car.gear)
   now.mph = num(car.speedKmh) * 0.621371
+  pcall(function() now.gx, now.gz = num(car.acceleration.x), num(car.acceleration.z) end)   -- g sideways and fore-aft
+  now.brake, now.steer = num(car.brake), num(car.steer)
   local lim = num(car.rpmLimiter)
   if lim > 1000 then now.limiter = lim end
   local base = 0
@@ -464,10 +466,10 @@ function script.update(dt)
     mapName, level = (m.name:gsub(',', '')), m.level
   end
   pcall(function() soundRpm = num(ac.CarAudioTweak.getParameter(ac.CarAudioEventID.EngineExt, 'rpms')) end)
-  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s,%d,%.0f',
+  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s,%d,%.0f,%.2f,%.2f,%.2f,%.1f',
     seq, now.rpm, now.gas, now.boost, now.tq, now.hp,
     num(car.drivetrainTorque), num(car.drivetrainPower), num(car.turboCount),
-    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' ')), num(store.rev), soundRpm), true)
+    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' ')), num(store.rev), soundRpm, now.gx, now.gz, now.brake, now.steer), true)
 end
 
 -- drawing helpers ------------------------------------------------------------
@@ -773,8 +775,9 @@ end
 
 -- the Cluster window ----------------------------------------------------------
 -- Five round clocks in a row, the way a sports car's instrument cluster is laid out: speed, horsepower with torque,
--- a large rev counter in the middle, the power curve, and a small one for the sound and rev limit. Only the clocks
--- are drawn, so the track shows between and around them.
+-- a large rev counter in the middle, the power curve, and a small one for g-force. Three unlabelled lights sit
+-- in them: the sound under the speed, the map under the power, the rev limit under the rev counter. Only the
+-- clocks are drawn, so the track shows between and around them.
 local K = {
   face = hex('07090B', 0.74), ring = hex('F4F7FA', 0.9), white = hex('F4F7FA'), ink = hex('0B0E11'), dimw = hex('F4F7FA', 0.55),
   off = hex('F4F7FA', 0.13), red = hex('E0312E'), amber = hex('F2A93B'), blue = hex('4C9BE8'), teal = hex('5DCAA5'),
@@ -847,10 +850,10 @@ local function powerClock(c, r, s, hpTop, tqTop)
   end
   value(r - 15 * s, 6 * s, now.hp, hpTop, peak.hp, K.red)
   value(r - 25 * s, 4 * s, now.tq, tqTop, peak.tq, K.white)
-  centred(thousands(now.hp), r * 0.36, c, -r * 0.47, K.white)
-  centred('hp', math.max(9, r * 0.12), c, -r * 0.10, K.red)
-  centred(thousands(now.tq), r * 0.27, c, r * 0.08, K.white)
-  centred('lb-ft', math.max(9, r * 0.12), c, r * 0.37, K.dimw)
+  centred(thousands(now.hp), r * 0.35, c, -r * 0.52, K.white)
+  centred('hp', math.max(9, r * 0.12), c, -r * 0.16, K.red)
+  centred(thousands(now.tq), r * 0.26, c, r * 0.00, K.white)
+  centred('lb-ft', math.max(9, r * 0.12), c, r * 0.27, K.dimw)
 end
 
 -- The power curve inside a clock: horsepower in red and torque in white against revs, filled in by full-throttle
@@ -959,29 +962,45 @@ local function revCounter(c, r, s)
   -- the needle, over the face only
   local an = A0 + (A1 - A0) * frac
   ui.drawLine(onArc(c, rc + 2 * s, an), onArc(c, r - 2 * s, an), st == 3 and K.white or K.red, 4 * s)
-  if cfg ~= nil then                                       -- which map is live, where a road car shows its drive mode
-    local m = clampIndex(store.map, #cfg.maps)
-    pill('##clmap', vec2(c.x, c.y + r - 20 * s), 64 * s, 17 * s, cfg.maps[m].name .. ' hp', m > 1 and K.red or K.white, flipMap)
-  end
-end
-
--- The small clock on the right: the sound and the rev limit as two quiet lights. A click works each switch.
-local function lights(c, r, s)
-  ui.drawCircleFilled(c, r, K.face, 48)
-  stroke(c, r - 5 * s, A0, A1, stage() == 1 and K.ring or K.red, 1.5 * s)
-  stroke(c, r - 9 * s, A0, A1, K.dimw, 1 * s)
-  if cfg == nil then return end
-  local sound = cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name
-  centred('sound', math.max(9, 10 * s), c, -r * 0.62, K.dimw)
-  pill('##clsound', vec2(c.x, c.y - r * 0.22), r * 1.45, 19 * s, sound, K.white, cycleSound)
-  if cfg.revs ~= nil then
+  if cfg ~= nil and cfg.revs ~= nil then                   -- the rev limit in force, where a road car shows its drive mode
     local live = 1
     for i = 2, #cfg.revs do
       if math.abs(now.limiter - cfg.revs[i].rpm) < math.abs(now.limiter - cfg.revs[live].rpm) then live = i end
     end
-    centred('rev limit', math.max(9, 10 * s), c, r * 0.10, K.dimw)
-    pill('##clrev', vec2(c.x, c.y + r * 0.50), r * 0.9, 19 * s, cfg.revs[live].name, live > 1 and K.red or K.white, flipRev)
+    pill('##clrev', vec2(c.x, c.y + r - 20 * s), 52 * s, 17 * s, cfg.revs[live].name, live > 1 and K.red or K.white, flipRev)
   end
+end
+
+-- The small clock on the right: g-force. The dot shows the force on the driver: it moves up under braking, down
+-- under power, and to the outside of a corner. Rings at 1 and 2 g, the edge is 3 g; a short trail follows the dot.
+local G = { x = 0, z = 0, trail = {}, timer = 0 }
+local function gForce(c, r, s, dt)
+  ui.drawCircleFilled(c, r, K.face, 48)
+  ui.drawCircle(c, r - 5 * s, stage() == 1 and K.ring or K.red, 48, 1.5 * s)
+  local scale = (r - 12 * s) / 3
+  ui.drawCircle(c, scale, K.off, 32, 1 * s)
+  ui.drawCircle(c, scale * 2, K.off, 40, 1 * s)
+  ui.drawLine(vec2(c.x - r + 12 * s, c.y), vec2(c.x + r - 12 * s, c.y), K.off, 1)
+  ui.drawLine(vec2(c.x, c.y - r + 12 * s), vec2(c.x, c.y + r - 12 * s), K.off, 1)
+  local k = math.min(1, (dt or 0.016) * 12)                  -- a little smoothing so the dot does not jitter
+  G.x, G.z = G.x + (now.gx - G.x) * k, G.z + (now.gz - G.z) * k
+  local function spot(gx, gz)
+    local m = math.sqrt(gx * gx + gz * gz)
+    local f = m > 3 and 3 / m or 1                           -- held at the edge beyond 3 g
+    return vec2(c.x - gx * f * scale, c.y + gz * f * scale)
+  end
+  G.timer = G.timer + (dt or 0.016)
+  if G.timer > 0.05 then
+    G.timer = 0
+    table.insert(G.trail, 1, { G.x, G.z })
+    G.trail[25] = nil
+  end
+  for i = #G.trail, 1, -1 do
+    ui.drawCircleFilled(spot(G.trail[i][1], G.trail[i][2]), 2 * s, hex('F4F7FA', 0.45 * (1 - i / 26)), 8)
+  end
+  ui.drawCircleFilled(spot(G.x, G.z), 5 * s, K.red, 16)
+  local total = math.sqrt(G.x * G.x + G.z * G.z)
+  centred(string.format('%.1f g', total), math.max(10, r * 0.17), c, r * 0.52, K.white)
 end
 
 function windowCluster(dt)
@@ -995,8 +1014,14 @@ function windowCluster(dt)
   local tqTop = niceTop(math.max(400, peak.tq))
   local mphTop = now.mph > 200 and 300 or 200
   clock(at(76, 180), 76 * s, s, now.mph, mphTop, 'mph', nil)
-  lights(at(904, 180), 76 * s, s)
+  gForce(at(904, 180), 76 * s, s, dt)
   powerClock(at(250, 168), 96 * s, s, hpTop, tqTop)
+  if cfg ~= nil then                                       -- three unlabelled lights; a click works each switch
+    local m = clampIndex(store.map, #cfg.maps)
+    local pm, ps = at(250, 168), at(76, 180)
+    pill('##clmap', vec2(pm.x, pm.y + 96 * s * 0.58), 60 * s, 16 * s, cfg.maps[m].name, m > 1 and K.red or K.white, flipMap)
+    pill('##clsound', vec2(ps.x, ps.y + 76 * s * 0.62), 84 * s, 16 * s, cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name, K.white, cycleSound)
+  end
   graphClock(at(730, 168), 96 * s, s)
   revCounter(at(490, 150), 136 * s, s)
 end
