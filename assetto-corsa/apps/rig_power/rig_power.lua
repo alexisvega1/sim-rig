@@ -48,6 +48,8 @@ local peak = { boost = 0, hp = 0, tq = 0, hpRpm = 0, tqRpm = 0 }
 local bins = {}              -- [rpm/100] = best full-throttle torque (lb-ft) seen there
 local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0, mph = 0, gx = 0, gz = 0, brake = 0, steer = 0 }
 local acc, seq = 0, 0
+-- g-force as the cluster shows it: smoothed values, a short trail, and the most seen in each direction
+local G = { x = 0, z = 0, trail = {}, timer = 0, up = 0, down = 0, left = 0, right = 0 }
 
 -- The wheel's turning controls, laid out as on a MOZA KS Pro: four thumb wheels and five knobs. x and y place each
 -- on the Wheel knobs panel (0..1). up and dn are the buttons one click right and left sends; the thumb wheels start
@@ -73,7 +75,7 @@ local GAME = {
   { 'DRS', 'DRS', 'DRS' }, { 'KERS', 'KERS', 'KERS' }, { '__EXT_FFB_RESET', '__EXT_FFB_RESET', 'FFB reset' },
 }
 
-local layout = { graphOnly = false, map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 }
+local layout = { graphOnly = false, clusterLayout = 1, map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 }
 for _, s in ipairs(SLOTS) do
   layout[s.id .. 'fn'], layout[s.id .. 'dev'], layout[s.id .. 'up'], layout[s.id .. 'dn'] = 0, '', s.up or -1, s.dn or -1
 end
@@ -118,6 +120,8 @@ local function resetPeaks()
   peak = { boost = 0, hp = 0, tq = 0, hpRpm = 0, tqRpm = 0 }
   bins = {}
 end
+
+local function resetG() G.up, G.down, G.left, G.right = 0, 0, 0, 0 end
 
 -- the switches ---------------------------------------------------------------
 local function fail(what, err)
@@ -958,7 +962,13 @@ local function revCounter(c, r, s)
   local gs = rc * 0.78
   centred(gearText, gs, c, -gs * 0.82, K.white)
   centred(thousands(math.floor(now.rpm / 10 + 0.5) * 10), 15 * s, c, gs * 0.20, zone)
-  centred(string.format('%.1f psi', psi), 12 * s, c, gs * 0.20 + 19 * s, K.teal)
+  if store.clusterLayout == 2 then
+    centred(string.format('%.0f mph', now.mph), 17 * s, c, gs * 0.20 + 18 * s, K.white)
+  else
+    centred(string.format('%.1f psi', psi), 12 * s, c, gs * 0.20 + 19 * s, K.teal)
+  end
+  ui.setCursor(vec2(c.x - gs * 0.4, c.y - gs * 0.75))
+  if ui.invisibleButton('##cllayout', vec2(gs * 0.8, gs * 0.85)) then store.clusterLayout = store.clusterLayout == 2 and 1 or 2 end
   -- the needle, over the face only
   local an = A0 + (A1 - A0) * frac
   ui.drawLine(onArc(c, rc + 2 * s, an), onArc(c, r - 2 * s, an), st == 3 and K.white or K.red, 4 * s)
@@ -972,22 +982,28 @@ local function revCounter(c, r, s)
 end
 
 -- The small clock on the right: g-force. The dot shows the force on the driver: it moves up under braking, down
--- under power, and to the outside of a corner. Rings at 1 and 2 g, the edge is 3 g; a short trail follows the dot.
-local G = { x = 0, z = 0, trail = {}, timer = 0 }
+-- under power, and to the outside of a corner. Rings at 1 and 2 g, the outer ring is 3 g; a short trail follows the
+-- dot. The four figures are the most seen in each direction since they were last cleared (a click clears them).
 local function gForce(c, r, s, dt)
   ui.drawCircleFilled(c, r, K.face, 48)
   ui.drawCircle(c, r - 5 * s, stage() == 1 and K.ring or K.red, 48, 1.5 * s)
-  local scale = (r - 12 * s) / 3
+  local reach = r - 27 * s
+  local scale = reach / 3
   ui.drawCircle(c, scale, K.off, 32, 1 * s)
   ui.drawCircle(c, scale * 2, K.off, 40, 1 * s)
-  ui.drawLine(vec2(c.x - r + 12 * s, c.y), vec2(c.x + r - 12 * s, c.y), K.off, 1)
-  ui.drawLine(vec2(c.x, c.y - r + 12 * s), vec2(c.x, c.y + r - 12 * s), K.off, 1)
+  ui.drawCircle(c, reach, K.off, 48, 1 * s)
+  ui.drawLine(vec2(c.x - reach, c.y), vec2(c.x + reach, c.y), K.off, 1)
+  ui.drawLine(vec2(c.x, c.y - reach), vec2(c.x, c.y + reach), K.off, 1)
   local k = math.min(1, (dt or 0.016) * 12)                  -- a little smoothing so the dot does not jitter
   G.x, G.z = G.x + (now.gx - G.x) * k, G.z + (now.gz - G.z) * k
+  if now.mph > 10 and math.abs(G.x) < 6 and math.abs(G.z) < 6 then        -- moving, and not a crash
+    G.left, G.right = math.max(G.left, -G.x), math.max(G.right, G.x)
+    G.up, G.down = math.max(G.up, -G.z), math.max(G.down, G.z)
+  end
   local function spot(gx, gz)
     local m = math.sqrt(gx * gx + gz * gz)
-    local f = m > 3 and 3 / m or 1                           -- held at the edge beyond 3 g
-    return vec2(c.x - gx * f * scale, c.y + gz * f * scale)
+    local f = m > 3 and 3 / m or 1                           -- held at the outer ring beyond 3 g
+    return vec2(c.x + gx * f * scale, c.y + gz * f * scale)   -- checked on a drive: a right-hand corner reads negative sideways, braking negative fore-aft
   end
   G.timer = G.timer + (dt or 0.016)
   if G.timer > 0.05 then
@@ -999,8 +1015,23 @@ local function gForce(c, r, s, dt)
     ui.drawCircleFilled(spot(G.trail[i][1], G.trail[i][2]), 2 * s, hex('F4F7FA', 0.45 * (1 - i / 26)), 8)
   end
   ui.drawCircleFilled(spot(G.x, G.z), 5 * s, K.red, 16)
-  local total = math.sqrt(G.x * G.x + G.z * G.z)
-  centred(string.format('%.1f g', total), math.max(10, r * 0.17), c, r * 0.52, K.white)
+  local size = math.max(9, r * 0.15)
+  centred(string.format('%.1f', G.up), size, vec2(c.x, c.y - r + 8 * s), 0, K.white)
+  centred(string.format('%.1f', G.down), size, vec2(c.x, c.y + r - 9 * s - size * 1.15), 0, K.white)
+  ui.dwriteDrawText(string.format('%.1f', G.left), size, vec2(c.x - r + 9 * s, c.y - size * 0.6), K.white)
+  local w = ui.measureDWriteText(string.format('%.1f', G.right), size).x
+  ui.dwriteDrawText(string.format('%.1f', G.right), size, vec2(c.x + r - 9 * s - w, c.y - size * 0.6), K.white)
+  ui.setCursor(vec2(c.x - reach, c.y - reach))
+  if ui.invisibleButton('##clg', vec2(reach * 2, reach * 2)) then resetG() end
+  if ui.itemHovered() then ui.setTooltip('Most g seen braking (top), under power (bottom) and cornering each way. Click to clear.') end
+end
+
+-- The cluster's settings (the cog on its title bar): which arrangement of the clocks to show.
+function windowClusterSettings(dt)
+  ui.text('Arrangement')
+  if ui.radioButton('Speed on the left, boost in the rev counter', store.clusterLayout ~= 2) then store.clusterLayout = 1 end
+  if ui.radioButton('Speed in the rev counter, boost on the left', store.clusterLayout == 2) then store.clusterLayout = 2 end
+  ui.text('Clicking the gear figure in the rev counter also switches between them.')
 end
 
 function windowCluster(dt)
@@ -1013,7 +1044,12 @@ function windowCluster(dt)
   local hpTop = niceTop(math.max(400, peak.hp))
   local tqTop = niceTop(math.max(400, peak.tq))
   local mphTop = now.mph > 200 and 300 or 200
-  clock(at(76, 180), 76 * s, s, now.mph, mphTop, 'mph', nil)
+  if store.clusterLayout == 2 then                         -- boost takes the left clock, speed moves into the rev counter
+    local peakPsi = peak.boost * BAR_TO_PSI
+    clock(at(76, 180), 76 * s, s, now.boost * BAR_TO_PSI, math.max(15, math.ceil((peakPsi + 1) / 10) * 10), 'psi', peakPsi)
+  else
+    clock(at(76, 180), 76 * s, s, now.mph, mphTop, 'mph', nil)
+  end
   gForce(at(904, 180), 76 * s, s, dt)
   powerClock(at(250, 168), 96 * s, s, hpTop, tqTop)
   if cfg ~= nil then                                       -- three unlabelled lights; a click works each switch
@@ -1045,7 +1081,7 @@ function windowMain(dt)
     label(string.format('Torque %s', thousands(now.tq)), 11, vec2(ix + 158, o.y + 12), COL.dim, 0)
     drawCurve(vec2(ix, o.y + 34), iw, math.max(60, h - 34 - 10))
     ui.setCursor(vec2(ix + iw - 118, o.y + 8))
-    if ui.button('Reset', vec2(52, 20)) then resetPeaks() end
+    if ui.button('Reset', vec2(52, 20)) then resetPeaks(); resetG() end
     ui.setCursor(vec2(ix + iw - 60, o.y + 8))
     if ui.button('Full', vec2(60, 20)) then store.graphOnly = false end
     return

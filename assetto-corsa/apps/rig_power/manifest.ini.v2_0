@@ -1,0 +1,38 @@
+[ABOUT]
+NAME = Boost and Power
+AUTHOR = alexisvega
+VERSION = 2.0
+DESCRIPTION = Boost dial, live horsepower and torque, and the power curve the car actually makes as you drive.
+
+[CORE]
+LAZY = NONE
+
+[WINDOW_0]
+ID = main
+NAME = Boost and Power
+ICON = icon.png
+FUNCTION_MAIN = windowMain
+FLAGS = FADING, FLOATING_TITLE_BAR, NO_BACKGROUND, NO_SCROLLBAR, NO_SCROLL_WITH_MOUSE
+SIZE = 440, 500
+MIN_SIZE = 280, 170
+PADDING = 0, 0
+
+[WINDOW_1]
+ID = wheel
+NAME = Wheel knobs
+ICON = icon.png
+FUNCTION_MAIN = windowWheel
+FLAGS = FADING, FLOATING_TITLE_BAR, NO_BACKGROUND, NO_SCROLLBAR, NO_SCROLL_WITH_MOUSE
+SIZE = 520, 330
+MIN_SIZE = 420, 280
+PADDING = 0, 0
+
+[WINDOW_2]
+ID = cluster
+NAME = Cluster
+ICON = icon.png
+FUNCTION_MAIN = windowCluster
+FLAGS = FADING, FLOATING_TITLE_BAR, NO_BACKGROUND, NO_SCROLLBAR, NO_SCROLL_WITH_MOUSE
+SIZE = 980, 300
+MIN_SIZE = 560, 180
+PADDING = 0, 0

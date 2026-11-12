@@ -1,6 +1,6 @@
 # Lap log
 
-269 laps in 67 sessions, 2026-09-12 to 2026-11-11. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
+271 laps in 68 sessions, 2026-09-12 to 2026-11-12. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
 
 ## Ferrari F2004
 
@@ -101,6 +101,7 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 | 2026-11-11 22:35 | 5 | Slick | 1:54.338 | 2:01.001 | 11.3 s |
 | 2026-11-11 23:03 | 1 | Slick | 4:08.978 | 4:08.978 | - |
 | 2026-11-11 23:43 | 1 | Slick | 7:11.695 | 7:11.695 | - |
+| 2026-11-12 00:03 | 2 | Slick | 2:52.800 | 2:52.800 | - |
 
 <details><summary>Every lap</summary>
 
@@ -140,6 +141,8 @@ Best lap **1:54.338** on 2026-11-11, on Slick tyres. Best sectors added together
 | 2026-11-11 | 5 | **1:54.338** | 0:38.905 | 0:43.934 | 0:31.499 | Slick |  |
 | 2026-11-11 | 1 | 4:08.978 | 1:45.176 | 1:44.436 | 0:39.366 | Slick |  |
 | 2026-11-11 | 1 | 7:11.695 | 3:22.028 | 2:41.775 | 1:07.892 | Slick |  |
+| 2026-11-12 | 1 | 3:45.987 | 1:52.308 | 0:59.953 | 0:53.726 | Slick |  |
+| 2026-11-12 | 2 | 2:52.800 | 1:18.416 | 0:58.339 | 0:36.045 | Slick |  |
 
 </details>
 
@@ -226,7 +229,7 @@ Best lap **6:59.801** on 2026-10-09, on Toyo R888R tyres. Best sectors added tog
 | Nordschleife | Porsche Carrera GT | 1 | 3 | 8:20.131 | Hypercar road | 8:20.131 | 2026-09-13 |
 | PCH - Southbound | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 1 | 1 | 11:29.542 | Toyo R888R | - | 2026-09-12 |
 | Road America | Ferrari F2004 | 4 | 30 | 1:43.726 | M | 1:42.349 | 2026-11-11 |
-| Road America | Porsche 911 GT2 RS / 2000hp MONSTER | 9 | 34 | 1:54.338 | Slick | 1:53.441 | 2026-11-11 |
+| Road America | Porsche 911 GT2 RS / 2000hp MONSTER | 10 | 36 | 1:54.338 | Slick | 1:53.441 | 2026-11-12 |
 | Road America | Porsche 911 (992) GT3 RS Weissach Package / No Hesi Spec | 5 | 40 | 2:02.617 | Toyo R888R | 2:01.908 | 2026-09-25 |
 | Road America | Ferrari F138 | 1 | 5 | 2:07.539 | M | 1:56.999 | 2026-09-15 |
 | Road America | Ferrari FXX K | 1 | 5 | 2:10.376 | M | 2:09.726 | 2026-09-16 |

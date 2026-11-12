@@ -11,59 +11,63 @@
 <text x="56" y="80.5" fill="#8b949e" text-anchor="end">2:02.6</text>
 <line x1="62" x2="744" y1="30.0" y2="30.0" stroke="#8b949e" stroke-opacity="0.25"/>
 <text x="56" y="34.0" fill="#8b949e" text-anchor="end">2:05.7</text>
-<text x="69.0" y="230" fill="#8b949e">Sep 17</text>
-<line x1="182.4" x2="182.4" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="189.4" y="230" fill="#8b949e">Nov 11</text>
-<line x1="262.6" x2="262.6" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="269.6" y="230" fill="#8b949e">Nov 11</text>
-<line x1="302.7" x2="302.7" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="309.7" y="230" fill="#8b949e">Nov 11</text>
-<line x1="362.9" x2="362.9" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="369.9" y="230" fill="#8b949e">Nov 11</text>
-<line x1="423.1" x2="423.1" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="430.1" y="230" fill="#8b949e">Nov 11</text>
-<line x1="603.6" x2="603.6" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="610.6" y="230" fill="#8b949e">Nov 11</text>
-<line x1="703.9" x2="703.9" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="710.9" y="230" fill="#8b949e">Nov 11</text>
-<line x1="723.9" x2="723.9" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
-<text x="731.0" y="230" fill="#8b949e">Nov 11</text>
+<text x="68.5" y="230" fill="#8b949e">Sep 17</text>
+<line x1="175.7" x2="175.7" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="182.1" y="230" fill="#8b949e">Nov 11</text>
+<line x1="251.4" x2="251.4" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="257.9" y="230" fill="#8b949e">Nov 11</text>
+<line x1="289.3" x2="289.3" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="295.8" y="230" fill="#8b949e">Nov 11</text>
+<line x1="346.2" x2="346.2" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="352.6" y="230" fill="#8b949e">Nov 11</text>
+<line x1="403.0" x2="403.0" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="409.5" y="230" fill="#8b949e">Nov 11</text>
+<line x1="573.5" x2="573.5" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="580.0" y="230" fill="#8b949e">Nov 11</text>
+<line x1="668.2" x2="668.2" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="674.7" y="230" fill="#8b949e">Nov 11</text>
+<line x1="687.2" x2="687.2" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="693.6" y="230" fill="#8b949e">Nov 11</text>
+<line x1="706.1" x2="706.1" y1="30" y2="216" stroke="#8b949e" stroke-opacity="0.35" stroke-dasharray="2 3"/>
+<text x="712.6" y="230" fill="#8b949e">Nov 12</text>
 <line x1="62" x2="744" y1="202.2" y2="202.2" stroke="#d95926" stroke-dasharray="4 3"/>
 <text x="744" y="216.2" fill="#d95926" text-anchor="end">best 1:54.338</text>
-<polyline points="72.0,30.0 92.1,30.0 112.1,30.0 132.2,30.0 152.3,30.0 172.3,30.0 192.4,30.0 212.4,30.0 232.5,30.0 252.6,30.0 272.6,30.0 292.7,30.0 312.7,30.0 332.8,62.4 352.9,52.8 372.9,30.0 393.0,109.3 413.0,103.6 433.1,30.0 453.1,65.8 473.2,97.6 493.3,55.1 513.3,30.0 533.4,30.0 553.4,43.6 573.5,104.2 593.6,30.0 613.6,30.0 633.7,101.9 653.7,30.0 673.8,31.3 693.9,202.2 713.9,30.0 734.0,30.0" fill="none" stroke="#3987e5" stroke-opacity="0.45" stroke-width="1.5"/>
-<path d="M68.0,37 L76.0,37 L72.0,30 Z" fill="#8b949e"><title>2026-09-17 lap 1: 3:17.061</title></path>
-<path d="M88.1,37 L96.1,37 L92.1,30 Z" fill="#8b949e"><title>2026-09-17 lap 2: 2:33.063</title></path>
-<path d="M108.1,37 L116.1,37 L112.1,30 Z" fill="#8b949e"><title>2026-09-17 lap 3: 2:15.058</title></path>
-<path d="M128.2,37 L136.2,37 L132.2,30 Z" fill="#8b949e"><title>2026-09-17 lap 4: 2:24.496</title></path>
-<path d="M148.3,37 L156.3,37 L152.3,30 Z" fill="#8b949e"><title>2026-09-17 lap 5: 2:57.071</title></path>
-<path d="M168.3,37 L176.3,37 L172.3,30 Z" fill="#8b949e"><title>2026-09-17 lap 6: 2:14.822</title></path>
-<path d="M188.4,37 L196.4,37 L192.4,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:24.931</title></path>
-<path d="M208.4,37 L216.4,37 L212.4,30 Z" fill="#8b949e"><title>2026-11-11 lap 2: 2:28.632</title></path>
-<path d="M228.5,37 L236.5,37 L232.5,30 Z" fill="#8b949e"><title>2026-11-11 lap 3: 2:19.805</title></path>
-<path d="M248.6,37 L256.6,37 L252.6,30 Z" fill="#8b949e"><title>2026-11-11 lap 4: 2:21.465</title></path>
-<path d="M268.6,37 L276.6,37 L272.6,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:38.291</title></path>
-<path d="M288.7,37 L296.7,37 L292.7,30 Z" fill="#8b949e"><title>2026-11-11 lap 2: 2:10.853</title></path>
-<path d="M308.7,37 L316.7,37 L312.7,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:23.478</title></path>
-<circle cx="332.8" cy="62.4" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:03.624</title></circle>
-<circle cx="352.9" cy="52.8" r="3.5" fill="#3987e5"><title>2026-11-11 lap 3: 2:04.258</title></circle>
-<path d="M368.9,37 L376.9,37 L372.9,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 2:24.129</title></path>
-<circle cx="393.0" cy="109.3" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:00.510</title></circle>
-<circle cx="413.0" cy="103.6" r="3.5" fill="#3987e5"><title>2026-11-11 lap 3: 2:00.887</title></circle>
-<path d="M429.1,37 L437.1,37 L433.1,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:05.027</title></path>
-<circle cx="453.1" cy="65.8" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:03.392</title></circle>
-<circle cx="473.2" cy="97.6" r="3.5" fill="#3987e5"><title>2026-11-11 lap 3: 2:01.287</title></circle>
-<circle cx="493.3" cy="55.1" r="3.5" fill="#3987e5"><title>2026-11-11 lap 4: 2:04.105</title></circle>
-<path d="M509.3,37 L517.3,37 L513.3,30 Z" fill="#8b949e"><title>2026-11-11 lap 5: 2:10.488</title></path>
-<path d="M529.4,37 L537.4,37 L533.4,30 Z" fill="#8b949e"><title>2026-11-11 lap 6: 2:06.517</title></path>
-<circle cx="553.4" cy="43.6" r="3.5" fill="#3987e5"><title>2026-11-11 lap 7: 2:04.867</title></circle>
-<circle cx="573.5" cy="104.2" r="3.5" fill="#3987e5"><title>2026-11-11 lap 8: 2:00.844</title></circle>
-<path d="M589.6,37 L597.6,37 L593.6,30 Z" fill="#8b949e"><title>2026-11-11 lap 9: 2:15.892</title></path>
-<path d="M609.6,37 L617.6,37 L613.6,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:56.512</title></path>
-<circle cx="633.7" cy="101.9" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:01.001</title></circle>
-<path d="M649.7,37 L657.7,37 L653.7,30 Z" fill="#8b949e"><title>2026-11-11 lap 3: 2:06.768</title></path>
-<circle cx="673.8" cy="31.3" r="3.5" fill="#3987e5"><title>2026-11-11 lap 4: 2:05.684</title></circle>
-<circle cx="693.9" cy="202.2" r="5" fill="#d95926"><title>2026-11-11 lap 5: 1:54.338</title></circle>
-<path d="M709.9,37 L717.9,37 L713.9,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 4:08.978</title></path>
-<path d="M730.0,37 L738.0,37 L734.0,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 7:11.695</title></path>
+<polyline points="71.5,30.0 90.4,30.0 109.4,30.0 128.3,30.0 147.2,30.0 166.2,30.0 185.1,30.0 204.1,30.0 223.0,30.0 242.0,30.0 260.9,30.0 279.9,30.0 298.8,30.0 317.8,62.4 336.7,52.8 355.6,30.0 374.6,109.3 393.5,103.6 412.5,30.0 431.4,65.8 450.4,97.6 469.3,55.1 488.2,30.0 507.2,30.0 526.1,43.6 545.1,104.2 564.0,30.0 583.0,30.0 601.9,101.9 620.9,30.0 639.8,31.3 658.8,202.2 677.7,30.0 696.6,30.0 715.6,30.0 734.5,30.0" fill="none" stroke="#3987e5" stroke-opacity="0.45" stroke-width="1.5"/>
+<path d="M67.5,37 L75.5,37 L71.5,30 Z" fill="#8b949e"><title>2026-09-17 lap 1: 3:17.061</title></path>
+<path d="M86.4,37 L94.4,37 L90.4,30 Z" fill="#8b949e"><title>2026-09-17 lap 2: 2:33.063</title></path>
+<path d="M105.4,37 L113.4,37 L109.4,30 Z" fill="#8b949e"><title>2026-09-17 lap 3: 2:15.058</title></path>
+<path d="M124.3,37 L132.3,37 L128.3,30 Z" fill="#8b949e"><title>2026-09-17 lap 4: 2:24.496</title></path>
+<path d="M143.2,37 L151.2,37 L147.2,30 Z" fill="#8b949e"><title>2026-09-17 lap 5: 2:57.071</title></path>
+<path d="M162.2,37 L170.2,37 L166.2,30 Z" fill="#8b949e"><title>2026-09-17 lap 6: 2:14.822</title></path>
+<path d="M181.1,37 L189.1,37 L185.1,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:24.931</title></path>
+<path d="M200.1,37 L208.1,37 L204.1,30 Z" fill="#8b949e"><title>2026-11-11 lap 2: 2:28.632</title></path>
+<path d="M219.0,37 L227.0,37 L223.0,30 Z" fill="#8b949e"><title>2026-11-11 lap 3: 2:19.805</title></path>
+<path d="M238.0,37 L246.0,37 L242.0,30 Z" fill="#8b949e"><title>2026-11-11 lap 4: 2:21.465</title></path>
+<path d="M256.9,37 L264.9,37 L260.9,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:38.291</title></path>
+<path d="M275.9,37 L283.9,37 L279.9,30 Z" fill="#8b949e"><title>2026-11-11 lap 2: 2:10.853</title></path>
+<path d="M294.8,37 L302.8,37 L298.8,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:23.478</title></path>
+<circle cx="317.8" cy="62.4" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:03.624</title></circle>
+<circle cx="336.7" cy="52.8" r="3.5" fill="#3987e5"><title>2026-11-11 lap 3: 2:04.258</title></circle>
+<path d="M351.6,37 L359.6,37 L355.6,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 2:24.129</title></path>
+<circle cx="374.6" cy="109.3" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:00.510</title></circle>
+<circle cx="393.5" cy="103.6" r="3.5" fill="#3987e5"><title>2026-11-11 lap 3: 2:00.887</title></circle>
+<path d="M408.5,37 L416.5,37 L412.5,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:05.027</title></path>
+<circle cx="431.4" cy="65.8" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:03.392</title></circle>
+<circle cx="450.4" cy="97.6" r="3.5" fill="#3987e5"><title>2026-11-11 lap 3: 2:01.287</title></circle>
+<circle cx="469.3" cy="55.1" r="3.5" fill="#3987e5"><title>2026-11-11 lap 4: 2:04.105</title></circle>
+<path d="M484.2,37 L492.2,37 L488.2,30 Z" fill="#8b949e"><title>2026-11-11 lap 5: 2:10.488</title></path>
+<path d="M503.2,37 L511.2,37 L507.2,30 Z" fill="#8b949e"><title>2026-11-11 lap 6: 2:06.517</title></path>
+<circle cx="526.1" cy="43.6" r="3.5" fill="#3987e5"><title>2026-11-11 lap 7: 2:04.867</title></circle>
+<circle cx="545.1" cy="104.2" r="3.5" fill="#3987e5"><title>2026-11-11 lap 8: 2:00.844</title></circle>
+<path d="M560.0,37 L568.0,37 L564.0,30 Z" fill="#8b949e"><title>2026-11-11 lap 9: 2:15.892</title></path>
+<path d="M579.0,37 L587.0,37 L583.0,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 3:56.512</title></path>
+<circle cx="601.9" cy="101.9" r="3.5" fill="#3987e5"><title>2026-11-11 lap 2: 2:01.001</title></circle>
+<path d="M616.9,37 L624.9,37 L620.9,30 Z" fill="#8b949e"><title>2026-11-11 lap 3: 2:06.768</title></path>
+<circle cx="639.8" cy="31.3" r="3.5" fill="#3987e5"><title>2026-11-11 lap 4: 2:05.684</title></circle>
+<circle cx="658.8" cy="202.2" r="5" fill="#d95926"><title>2026-11-11 lap 5: 1:54.338</title></circle>
+<path d="M673.7,37 L681.7,37 L677.7,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 4:08.978</title></path>
+<path d="M692.6,37 L700.6,37 L696.6,30 Z" fill="#8b949e"><title>2026-11-11 lap 1: 7:11.695</title></path>
+<path d="M711.6,37 L719.6,37 L715.6,30 Z" fill="#8b949e"><title>2026-11-12 lap 1: 3:45.987</title></path>
+<path d="M730.5,37 L738.5,37 L734.5,30 Z" fill="#8b949e"><title>2026-11-12 lap 2: 2:52.800</title></path>
 <text x="62" y="246" fill="#8b949e">filled: clean lap    ring: lap with a cut    triangle: more than 10% off the best</text>
 </svg>

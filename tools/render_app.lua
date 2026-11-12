@@ -1,12 +1,13 @@
 -- Run the in-game app with stand-in game functions whose drawing calls write an SVG, to look at a window off-game.
 --   lua -e "W=980 H=300 RPM=8200" tools/render_app.lua assetto-corsa/apps/rig_power/rig_power.lua windowCluster out.svg
--- GRAPH=true shows the gauge in its graph-only mode. Text widths are estimated, so spacing is close to the game's but not exact.
+-- GRAPH=true shows the gauge in its graph-only mode, LAYOUT=2 the cluster's second arrangement.
+-- Text widths are estimated, so spacing is close to the game's but not exact.
 local out = {}
 local function css(c) return string.format('rgba(%d,%d,%d,%.2f)', math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5), c[4] or 1) end
 vec2 = function(x, y) return { x = x, y = y } end
 rgbm = function(r, g, b, a) return { r, g, b, a } end
 local car = { rpm = RPM or 10400, turboBoost = 4.71, gas = 1, gear = 5, rpmLimiter = LIMIT or 12000, drivetrainTorque = 0, drivetrainPower = 0, turboCount = 2, speedKmh = 372, acceleration = { x = 1.6, y = 0, z = -1.9 }, brake = 0.8, steer = 40, turboWastegates = { [0] = 0.8, [1] = 0.8 } }
-local stored = { map = 2, sound = 6, rev = 2, graphOnly = GRAPH or false }
+local stored = { map = 2, sound = 6, rev = 2, graphOnly = GRAPH or false, clusterLayout = LAYOUT or 1 }
 local path = {}
 ac = {
   FolderID = { Root = 1, ContentCars = 13 }, getFolder = function() return 'C:/ac' end,
