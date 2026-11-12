@@ -589,15 +589,32 @@ local function drawCurve(o, w, h)
   ui.drawCircleFilled(vec2(X(now.rpm), Y(now.tq)), 4, COL.tq, 16)
 end
 
+local STRIP = 64                                        -- height of the rev strip at the bottom of the panel
+
+-- Gear, a rev bar and the revs in large figures. The bar and the figures turn amber in the last 15% before the
+-- limiter and red in the last 7%, so the limit can be seen coming without reading the number.
 local function drawRevStrip(o, w)
   local gearText = now.gear < 0 and 'R' or (now.gear == 0 and 'N' or string.format('%d', now.gear))
-  ui.drawRect(o, vec2(o.x + 34, o.y + 26), COL.edge, 6, nil, 1)
-  label(gearText, 18, vec2(o.x + 17, o.y + 1), COL.text, 0.5)
-  local bx, bw = o.x + 44, w - 44 - 84
   local frac = math.min(1, now.rpm / math.max(1, now.limiter))
-  bar(vec2(bx, o.y + 9), bw, 8, frac, COL.dim)
-  ui.drawLine(vec2(bx + bw * 0.92, o.y + 5), vec2(bx + bw * 0.92, o.y + 21), COL.red, 1)   -- redline mark
-  label(thousands(math.floor(now.rpm / 10 + 0.5) * 10) .. ' rpm', 12, vec2(o.x + w, o.y + 5), COL.dim, 1)
+  local hot = frac >= 0.93 and COL.red or (frac >= 0.85 and COL.tq or nil)
+  ui.drawRect(o, vec2(o.x + 46, o.y + 46), hot or COL.edge, 8, nil, hot and 2 or 1)
+  label(gearText, 30, vec2(o.x + 23, o.y + 3), COL.text, 0.5)
+  local rpmText = thousands(math.floor(now.rpm / 10 + 0.5) * 10)
+  local tw = ui.measureDWriteText('00,000', 30).x
+  label(rpmText, 30, vec2(o.x + w, o.y - 2), hot or COL.text, 1)
+  label(string.format('rpm   limit %s', thousands(now.limiter)), 11, vec2(o.x + w, o.y + 33), COL.faint, 1)
+  local bx, bw = o.x + 58, w - 58 - tw - 14
+  bar(vec2(bx, o.y + 8), bw, 14, frac, hot or COL.dim)
+  ui.drawLine(vec2(bx + bw * 0.85, o.y + 3), vec2(bx + bw * 0.85, o.y + 27), COL.tq, 1)    -- amber from here
+  ui.drawLine(vec2(bx + bw * 0.93, o.y + 3), vec2(bx + bw * 0.93, o.y + 27), COL.red, 2)   -- red from here
+  local step = now.limiter > 10000 and 2000 or 1000                                          -- a tick every thousand or two
+  local r = step
+  while r < now.limiter do
+    local x = bx + bw * r / now.limiter
+    ui.drawLine(vec2(x, o.y + 26), vec2(x, o.y + 31), COL.tick, 1)
+    label(string.format('%d', r / 1000), 9, vec2(x, o.y + 32), COL.faint, 0.5)
+    r = r + step
+  end
 end
 
 -- One switch: a caption, then a pill. Left click acts; right click waits for a wheel button to tie to it.
@@ -789,10 +806,10 @@ function windowMain(dt)
 
   local row = cfg ~= nil and 64 or 0                              -- room for the two lines of switches on cars that have them
   local cy = ly + 18
-  local ch = math.max(70, h - (cy - o.y) - 46 - row)
+  local ch = math.max(70, h - (cy - o.y) - STRIP - 8 - row)
   drawCurve(vec2(ix, cy), iw, ch)
-  if cfg ~= nil then drawSwitches(vec2(ix, o.y + h - 38 - row), iw) end
-  drawRevStrip(vec2(ix, o.y + h - 38), iw)
+  if cfg ~= nil then drawSwitches(vec2(ix, o.y + h - STRIP - row), iw) end
+  drawRevStrip(vec2(ix, o.y + h - STRIP + 6), iw)
 
   ui.setCursor(vec2(ix + 150, o.y + 8))                           -- a small reset in the header
   if ui.button('Reset', vec2(52, 20)) then resetPeaks() end
