@@ -94,6 +94,78 @@ def test_pause_is_ignored_and_a_teleport_drops_the_lap():
     assert len(record([{}, {}], mangle=to_pits)) < 2
 
 
+def test_a_run_that_ends_in_a_reset_is_kept_as_a_dnf(home):
+    src = list(sim.drive([{}, {}]))
+    b, laps, fed = laprec.LapBuilder(), [], []
+    for i, s in enumerate(src):
+        if i == 9000:                                             # slows to a stop on the second lap, then back to the pits
+            for k in range(120):
+                fed.append(s._replace(spd=max(0.0, s.spd * (1 - k / 100)), lap_ms=s.lap_ms + k * 12, npos=s.npos + k * 1e-6))
+            fed.append(s._replace(npos=(s.npos + 0.4) % 1.0, lap_ms=s.lap_ms + 2000))
+            break
+        fed.append(s)
+    for s in fed:
+        lap = b.feed(s)
+        if lap:
+            laps.append(lap)
+    assert len(laps) == 1 and not laps[0].get("partial")
+    out, dnf = b.partials
+    assert (out["status"], out["how"], out["from_line"]) == ("out-lap", "reached the line", False)
+    assert (dnf["status"], dnf["how"], dnf["from_line"], dnf["i0"]) == ("dnf", "crash", True, 0)
+    assert 0.5 < dnf["len"] / dnf["n"] < 0.99 and all(len(dnf[k]) == dnf["len"] for k in laprec.SERIES) and dnf["t"][0] < 100
+    # saved under names that the lap list passes over, and listed separately with how they compare to the best lap
+    laprec.save(laps[0], "car_a", "track_x", when=1_794_440_000)
+    laprec.save(dnf, "car_a", "track_x", when=1_794_440_100)
+    laprec.save(out, "car_a", "track_x", when=1_794_439_900)
+    assert [m["ms"] for m in lapsan.index()] == [laps[0]["ms"]]
+    assert [m["status"] for m in lapsan.runs("track_x", "car_a")] == ["out-lap", "dnf"]
+    row = [r for r in lapsan.run_rows("track_x", "car_a") if r["status"] == "dnf"][0]
+    assert row["how"] == "crash" and row["from_m"] == 0 and row["to_m"] > 1000 and abs(row["vs_best_ms"]) < 2500
+    assert lapsan.overlay("track_x", "car_a", clean=False) is None or True   # one lap is not enough to overlay; must not raise
+
+
+def test_a_first_lap_is_timed_from_the_line(home):
+    """A hotlap session starts the car before the line with the clock running and does not count the first crossing."""
+    src = [s for s in sim.drive([{}, {}])]
+    first = next(i for i, s in enumerate(src) if s.laps == src[0].laps + 1)     # where the line is first crossed
+    second = next(i for i, s in enumerate(src) if s.laps == src[0].laps + 2)
+    start = first - 150                                                         # the grid slot, a little before the line
+    base, offset = src[first].laps, 5000 - src[start].lap_ms
+    b, laps = laprec.LapBuilder(), []
+    for i, s in enumerate(src[start:], start):
+        if i < second:                                                          # one long "lap" as the game sees it
+            clock = (s.lap_ms + offset) if i < first else (src[first - 1].lap_ms + offset + s.lap_ms)
+            s = s._replace(laps=base, last_ms=0, lap_ms=clock)
+        else:
+            s = s._replace(laps=base + 1 + (s.laps - src[second].laps), last_ms=src[first - 1].lap_ms + offset + src[second].last_ms if i < len(src) else 0)
+        lap = b.feed(s)
+        if lap:
+            laps.append(lap)
+    assert laps, "the first lap was not recorded"
+    lap = laps[0]
+    assert lap["first_lap"] and lap["official_ms"] > lap["ms"] + 1000           # the game's figure includes the run-up
+    assert abs(lap["ms"] - src[second].last_ms) < 150 and lap["t"][0] < 100     # ours is the lap from line to line
+
+
+def test_standing_start_laps_get_a_flying_equivalent(three_laps):
+    ref = three_laps[0]
+    slow = json.loads(json.dumps(ref))                                         # the same lap, launched from rest
+    n, zone = slow["n"], slow["n"] // 12
+    for i in range(zone):
+        slow["spd"][i] = ref["spd"][i] * (0.05 + 0.95 * i / zone)
+    cost = 6000
+    slow["t"] = [t + cost * min(1.0, i / zone) for i, t in enumerate(ref["t"])]
+    slow["ms"] = ref["ms"] + cost
+    laprec.save(slow, "car_a", "track_x", when=1_794_441_000)
+    metas = lapsan.annotate([m for m in lapsan.index() if m["car"] == "car_a"])
+    marked = [m for m in metas if m["standing"]]
+    assert len(marked) == 1 and marked[0]["ms"] == slow["ms"]
+    assert abs(marked[0]["flying_ms"] - ref["ms"]) < 700 and lapsan.pace(marked[0]) == marked[0]["flying_ms"]
+    assert all(not m["standing"] and m["flying_ms"] is None for m in metas if m is not marked[0])
+    a = lapsan.overlay("track_x", "car_a", limit=12, clean=True)               # judged on its flying equivalent, it is kept
+    assert any(l["ms"] == slow["ms"] and l["standing"] for l in a["laps"]) and a["runs"] == []
+
+
 def test_save_index_and_load(three_laps):
     idx = lapsan.index()
     assert [m["ms"] for m in idx] == [lap["ms"] for lap in three_laps]
@@ -102,6 +174,13 @@ def test_save_index_and_load(three_laps):
     assert lapsan.load("../../../etc/passwd") is None and lapsan.load("track_x/car_a/missing.json") is None
     assert laprec.track_id("ks_nordschleife", "touristenfahrten") == "ks_nordschleife-touristenfahrten"
     assert laprec.track_id("lilski_road_america", "") == laprec.track_id("lilski_road_america", "lilski_road_america") == "lilski_road_america"
+    ini = laprec.LAPS.parent / "race.ini"                                  # the layout, when the telemetry leaves it out
+    ini.write_text("[HEADER]\nVERSION=2\n\n[RACE]\nMODEL=car_a\nTRACK=ks_nordschleife\nCONFIG_TRACK=nordschleife\n\n[CAR_0]\nMODEL=-\n")
+    old, laprec.RACE_INI = laprec.RACE_INI, ini
+    try:
+        assert laprec.layout_of("ks_nordschleife") == "nordschleife" and laprec.layout_of("some_other_track") == ""
+    finally:
+        laprec.RACE_INI = old
 
 
 # ------------------------------------------------------------------ analysis ---
