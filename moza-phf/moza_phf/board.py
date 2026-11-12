@@ -114,7 +114,7 @@ def laps() -> dict:
 
 
 def state() -> dict:
-    dash = rigcfg.read_state("dash")
+    dash = rigcfg.read_state("dash", 6.0)                 # the bridge reports about once a second, sometimes later
     if dash and dash.get("car"):
         dash["carName"] = ui_name("car", dash["car"])
     return {"dash": dash, "haptics": rigcfg.read_state("haptics"), "recorder": rigcfg.read_state("recorder", 6.0),
@@ -171,6 +171,24 @@ def overlay_report(query: dict) -> dict | None:
     return a
 
 
+RECORDER = None            # the lap recorder running inside this board, if it has one
+
+
+def live() -> dict:
+    """The lap in progress, for the Live tab."""
+    if RECORDER is None:
+        return {"live": False, "recording": False}
+    return {**RECORDER.live.snapshot(), "recording": True}
+
+
+def live_reference(query: dict) -> dict | None:
+    one = lambda k: (query.get(k) or [None])[0]
+    a = lapsan.reference(one("track") or "", one("car") or "")
+    if a:
+        a["carName"], a["trackName"] = ui_name("car", a["car"]), ui_name("track", a["track"])
+    return a
+
+
 def request_test(effect: str, seconds: float = 1.0) -> dict:
     if effect not in rigcfg.EFFECTS:
         raise ValueError(f"unknown effect {effect!r}")
@@ -222,6 +240,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(recorded())
         if path == "/api/rec/analysis":
             return self._json(track_report(parse_qs(qs)) or {"error": "no recorded laps for that car and track"})
+        if path == "/api/live":
+            return self._json(live())
+        if path == "/api/live/ref":
+            return self._json(live_reference(parse_qs(qs)) or {"error": "no lap recorded here in this car yet"})
         if path == "/api/rec/overlay":
             a = overlay_report(parse_qs(qs))
             return self._json(a or {"error": "No recorded laps for that car on that track yet."})
@@ -254,7 +276,9 @@ def serve(port: int = 8765, record: bool = True) -> None:
     srv = make_server(port)
     print(f"control board: http://127.0.0.1:{srv.server_address[1]}", flush=True)
     if record:
-        laprec.Recorder().start()                              # records laps for the Track tab while the board runs
+        global RECORDER
+        RECORDER = laprec.Recorder()                           # records laps while the board runs, and feeds the Live tab
+        RECORDER.start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

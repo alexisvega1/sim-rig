@@ -243,6 +243,54 @@ def save(lap: dict, car: str, track: str, when: float | None = None) -> str:
     return str(path)
 
 
+class Live:
+    """The lap being driven right now, for the board's live view: the latest reading, and this lap so far on
+    G steps of track position (filled in as the car goes round, cleared at the line or on a reset)."""
+    G = 500
+    KEYS = ("t", "spd", "thr", "brk", "gear", "rpm")
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.car = self.track = ""
+        self.seq = 0
+        self.clear()
+
+    def clear(self) -> None:
+        self.head, self.start, self.now = -1, -1, None
+        self.cur = {k: [None] * self.G for k in self.KEYS}
+
+    def update(self, s: Sample, t0: int, car: str, track: str) -> None:
+        with self.lock:
+            if (car, track) != (self.car, self.track):
+                self.car, self.track = car, track
+                self.clear()
+            i = min(self.G - 1, max(0, int(s.npos * self.G)))
+            if self.head >= 0:
+                gap = i - self.head
+                if gap < -self.G * 0.5:                     # over the line: a new lap
+                    self.clear()
+                elif gap < -2 or gap > self.G * 0.05:        # a jump: back to the pits, or a reset
+                    self.clear()
+            vals = {"t": s.lap_ms - t0, "spd": round(s.spd, 1), "thr": round(s.thr, 2), "brk": round(s.brk, 2),
+                    "gear": s.gear, "rpm": int(s.rpm)}
+            first = i if self.head < 0 else self.head + 1
+            if self.head < 0:
+                self.start = i
+            for j in range(first, i + 1):                    # fill every step passed since the last reading
+                for k in self.KEYS:
+                    self.cur[k][j] = vals[k]
+            self.head = max(self.head, i)
+            self.seq += 1
+            self.now = {**vals, "npos": round(s.npos, 5), "x": round(s.x, 1), "z": round(s.z, 1), "laps": s.laps,
+                        "glat": 0, "at": time.time()}
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            fresh = self.now is not None and time.time() - self.now["at"] < 2.0
+            return {"live": fresh, "car": self.car, "track": self.track, "seq": self.seq, "g": self.G, "head": self.head,
+                    "start": self.start, "now": self.now, "cur": {k: list(v) for k, v in self.cur.items()}}
+
+
 class Recorder(threading.Thread):
     """Background thread: reconnects by itself, saves laps as you cross the line."""
 
@@ -251,6 +299,7 @@ class Recorder(threading.Thread):
         self.addr = (host, port)
         self.saved = 0
         self.stop = False
+        self.live = Live()
 
     def _keep(self, b: LapBuilder, car: str, track: str) -> None:
         """Save whatever unfinished runs the builder has put aside."""
@@ -286,7 +335,9 @@ class Recorder(threading.Thread):
                     quiet = 0
                     if len(d) != 328:
                         continue
-                    lap = b.feed(parse(d))
+                    sample = parse(d)
+                    lap = b.feed(sample)
+                    self.live.update(sample, b.t0, car, track)
                     if lap:
                         save(lap, car, track)
                         self.saved += 1

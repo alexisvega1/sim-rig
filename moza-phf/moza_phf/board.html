@@ -152,6 +152,14 @@
   .heat tr.foot td{color:var(--ink2); border-top:1px solid var(--axis); border-radius:0}
   .heat .tag{font-size:11px; color:var(--muted); margin-left:6px}
   .legend .kline.all{background:var(--deemph)}
+  /* live timing: the colours racing timing screens use for a slice of the lap */
+  :root{ --pb:#a855f7; --up:#16a34a; --dn:#d9a400 }
+  @media (prefers-color-scheme: dark){ :root{ --pb:#c084fc; --up:#22c55e; --dn:#facc15 } }
+  .livebar{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; margin-bottom:16px}
+  .livebar .tile .v{font-variant-numeric:tabular-nums}
+  .ped{height:10px; background:var(--track); border-radius:5px; overflow:hidden; margin-top:6px}
+  .ped i{display:block; height:100%; border-radius:5px}
+  .sw3 i{width:14px; height:6px; border-radius:3px; display:inline-block; margin-right:6px}
   td .mini{display:inline-block; height:8px; background:var(--s1); border-radius:0 4px 4px 0; vertical-align:middle; margin-right:8px; min-width:0}
 </style>
 </head>
@@ -167,6 +175,7 @@
   <button role="tab" data-tab="laps" aria-selected="false">Lap times</button>
   <button role="tab" data-tab="track" aria-selected="false">Track map</button>
   <button role="tab" data-tab="overlay" aria-selected="false">All laps</button>
+  <button role="tab" data-tab="live" aria-selected="false">Live</button>
 </nav>
 <main>
   <section id="tab-haptics"></section>
@@ -174,6 +183,7 @@
   <section id="tab-laps" hidden></section>
   <section id="tab-track" hidden></section>
   <section id="tab-overlay" hidden></section>
+  <section id="tab-live" hidden></section>
 </main>
 <div id="tip" role="tooltip"></div>
 
@@ -220,13 +230,14 @@ function save(reconcile){
 }
 
 // ------------------------------------------------------------------ tabs ---
-const TABS = ["haptics", "lights", "laps", "track", "overlay"];
+const TABS = ["haptics", "lights", "laps", "track", "overlay", "live"];
 function showTab(name){
   for (const b of document.querySelectorAll("nav button")) b.setAttribute("aria-selected", b.dataset.tab === name);
   for (const t of TABS) $("#tab-" + t).hidden = t !== name;
   if (name === "laps") drawLaps();
   if (name === "track") drawTrack();
   if (name === "overlay") drawOverlay();
+  if (name === "live") startLive();
   try { localStorage.setItem("rig_tab", name); history.replaceState(null, "", "#" + name); } catch (e) {}
 }
 for (const b of document.querySelectorAll("nav button")) b.addEventListener("click", () => showTab(b.dataset.tab));
@@ -1128,6 +1139,172 @@ function overlayTraces(holder, a, hover){
     svg.append(cross, hit);
     holder.append(h("div", {class:"chart-title"}, c.title), svg);
   }
+}
+
+// ------------------------------------------------------------------- live ---
+// The lap being driven now, against the best lap on record: where the car is, the traces growing as it goes,
+// each slice of the lap coloured the way timing screens do, and each corner scored as it is finished.
+let lv = {timer:null, ref:null, key:"", count:-1, built:false, els:{}};
+const PB = "var(--pb)", UP = "var(--up)", DN = "var(--dn)";
+
+function startLive(){
+  if (lv.timer) return;
+  lv.built = false;
+  lv.timer = setInterval(tickLive, 150);
+  tickLive();
+}
+
+async function tickLive(){
+  const root = $("#tab-live");
+  if (root.hidden){ clearInterval(lv.timer); lv.timer = null; return; }
+  let d = null;
+  try { d = await api("/api/live"); } catch (e) {}
+  if (!d || d.error || d.recording === undefined){
+    root.replaceChildren(h("div", {class:"card empty"}, "This page is newer than the board program that is running. Start MOZA Rig from the Desktop again and this tab will come alive."));
+    lv.built = false; return;
+  }
+  if (!d.recording){
+    root.replaceChildren(h("div", {class:"card empty"}, "This copy of the board isn't recording, so it has no live data. Start MOZA Rig from the Desktop."));
+    lv.built = false; return;
+  }
+  if (!d.car){
+    root.replaceChildren(h("div", {class:"card"}, h("h2", {}, "Waiting for a session"), h("p", {class:"sub"}, "Start driving and this fills in by itself.")));
+    lv.built = false; return;
+  }
+  const key = d.track + "|" + d.car;
+  if (key !== lv.key || !lv.built){
+    lv.key = key; lv.ref = null; lv.count = -1;
+    try { const r = await api("/api/live/ref?" + new URLSearchParams({track:d.track, car:d.car})); lv.ref = r && !r.error ? r : null; } catch (e) {}
+    buildLive(d);
+  } else if (st.recorder && st.recorder.saved !== lv.count && lv.count >= 0){   // a lap was just saved: it may be the new best
+    lv.count = st.recorder.saved;
+    try { const r = await api("/api/live/ref?" + new URLSearchParams({track:d.track, car:d.car})); if (r && !r.error){ lv.ref = r; buildLive(d); } } catch (e) {}
+  }
+  if (st.recorder && lv.count < 0) lv.count = st.recorder.saved;
+  paintLive(d);
+}
+
+function buildLive(d){
+  const root = $("#tab-live"), ref = lv.ref, E = lv.els = {};
+  root.replaceChildren();
+  const tile = (k, id, n) => { const v = h("div", {class:"v"}, "–"), nn = h("div", {class:"n"}, n || ""); E[id] = v; E[id + "n"] = nn;
+    return h("div", {class:"tile"}, h("div", {class:"k"}, k), v, nn); };
+  E.thr = h("i", {style:"background:var(--up); width:0"}); E.brk = h("i", {style:"background:var(--critical); width:0"});
+  root.append(h("div", {class:"small", style:"margin-bottom:10px"}, ref
+    ? `${carName(d.car)} · measured against your best lap here, ${fmtLap(ref.lap.ms)}${lapNote(ref.lap)}`
+    : `${carName(d.car)} · no lap recorded here in this car yet, so there is nothing to measure against. Finish one lap and the comparison starts.`));
+  root.append(h("div", {class:"livebar"},
+    tile("Speed", "spd", unit()), tile("Gear", "gear", ""), tile("Revs", "rpm", "rpm"), tile("This lap", "lap", ""),
+    tile("Against best", "delta", "at this point of the lap"),
+    h("div", {class:"tile"}, h("div", {class:"k"}, "Throttle"), h("div", {class:"ped"}, E.thr), h("div", {class:"k", style:"margin-top:10px"}, "Brake"), h("div", {class:"ped"}, E.brk))));
+  const mapCard = h("div", {class:"card"}, h("h2", {}, "Where you are"),
+    h("p", {class:"sub"}, "Each slice of the lap is coloured as you finish it."),
+    E.map = h("div"),
+    h("div", {class:"scale sw3"}, h("span", {class:"sw"}, h("i", {style:`background:${PB}`}), "Your best ever through that slice"),
+      h("span", {class:"sw"}, h("i", {style:`background:${UP}`}), "Quicker than on your best lap"),
+      h("span", {class:"sw"}, h("i", {style:`background:${DN}`}), "Slower"), h("span", {class:"sw"}, h("i", {style:"background:var(--deemph)"}), "Still to come")));
+  const cornerCard = h("div", {class:"card"}, h("h2", {}, "Corners on this lap"),
+    h("p", {class:"sub"}, `Each corner as you leave it: slowest speed (${unit()}) and time through it, against your best lap.`),
+    E.corners = h("div", {class:"scroll", style:"max-height:430px"}));
+  root.append(h("div", {class:"two"}, mapCard, cornerCard));
+  root.append(h("div", {class:"card"}, h("h2", {}, "Traces"),
+    h("p", {class:"sub"}, "This lap drawn as you drive it, over your best lap. The line marks where the car is."),
+    h("div", {class:"legend"}, h("span", {}, h("i", {class:"kline one"}), "This lap"), h("span", {}, h("i", {class:"kline all"}), "Best lap")),
+    E.traces = h("div")));
+  lv.built = true; lv.mapW = 0;
+}
+
+function paintLive(d){
+  const E = lv.els, ref = lv.ref, now = d.now, G = d.g, head = d.head, cur = d.cur;
+  if (!lv.built || !now) return;
+  const stale = !d.live;
+  E.spd.textContent = spdU(now.spd).toFixed(0); E.spdn.textContent = unit() + (stale ? " · paused or stopped" : "");
+  E.gear.textContent = now.gear < 0 ? "R" : now.gear || "N";
+  E.rpm.textContent = now.rpm.toLocaleString();
+  E.lap.textContent = fmtLap(Math.max(0, now.t));
+  E.thr.style.width = Math.round(now.thr * 100) + "%"; E.brk.style.width = Math.round(now.brk * 100) + "%";
+  const fromLine = d.start >= 0 && d.start <= 2;                    // this lap began at the line, so its clock compares
+  if (ref && ref.g === G && head >= 0 && fromLine){
+    const dl = now.t - ref.t[head];
+    E.delta.textContent = `${signed(dl, 2)} s`; E.delta.style.color = dl <= 0 ? UP : "var(--critical)";
+    E.deltan.textContent = "at this point of the lap";
+  } else { E.delta.textContent = "–"; E.delta.style.color = ""; E.deltan.textContent = ref ? "starts when you cross the line" : "needs a recorded lap"; }
+
+  // ---- map
+  const holder = E.map, W = Math.max(300, holder.clientWidth || 560), H = Math.round(Math.min(460, W * 0.78)), pad = 26;
+  if (ref && ref.g === G){
+    const X = ref.x, Z = ref.z, x0 = Math.min(...X), x1 = Math.max(...X), z0 = Math.min(...Z), z1 = Math.max(...Z);
+    const s = Math.min((W - 2 * pad) / Math.max(1, x1 - x0), (H - 2 * pad) / Math.max(1, z1 - z0));
+    const ox = (W - (x1 - x0) * s) / 2, oz = (H - (z1 - z0) * s) / 2;
+    const px = i => ox + (X[i] - x0) * s, py = i => oz + (Z[i] - z0) * s;
+    const K = ref.mini_best.length, edge = k => Math.round(k * G / K);
+    const colour = k => {                                            // one slice: done or not, and how it went
+      const a = edge(k), b = Math.min(G - 1, edge(k + 1));
+      if (!fromLine && a < d.start) return "var(--deemph)";
+      if (head < b || cur.t[a] == null || cur.t[b] == null) return "var(--deemph)";
+      const ms = cur.t[b] - cur.t[a];
+      return ms <= ref.mini_best[k] ? PB : ms <= ref.mini_lap[k] ? UP : DN;
+    };
+    const svg = sv("svg", {viewBox:`0 0 ${W} ${H}`, width:"100%", height:H, role:"img", "aria-label":"The track, with the car's position and each slice of this lap coloured"});
+    const pts = Array.from({length:G}, (_, i) => `${px(i).toFixed(1)},${py(i).toFixed(1)}`).join(" ");
+    svg.append(sv("polygon", {points:pts, fill:"none", stroke:"var(--track)", "stroke-width":12, "stroke-linejoin":"round"}));
+    for (let k = 0; k < K; k++){
+      const a = edge(k), b = Math.min(G - 1, edge(k + 1)), seg = [];
+      for (let i = a; i <= b; i++) seg.push(`${px(i).toFixed(1)},${py(i).toFixed(1)}`);
+      svg.append(sv("polyline", {points:seg.join(" "), fill:"none", stroke:colour(k), "stroke-width":5, "stroke-linecap":"round", "stroke-linejoin":"round"}));
+    }
+    for (const c of ref.corners) svg.append(sv("text", {x:px(c.apex), y:py(c.apex) - 9, "text-anchor":"middle", class:"lbl"}, `T${c.n}`));
+    svg.append(sv("circle", {cx:px(0), cy:py(0), r:4, fill:"var(--ink)", stroke:"var(--surface)", "stroke-width":2}));
+    // the car where it really is: its own coordinates, on the same scale as the line
+    svg.append(sv("circle", {cx:ox + (now.x - x0) * s, cy:oz + (now.z - z0) * s, r:8, fill:"var(--critical)", stroke:"var(--surface)", "stroke-width":2.5}));
+    holder.replaceChildren(svg);
+  } else holder.replaceChildren(h("div", {class:"empty"}, "The map appears once one lap has been recorded here in this car."));
+
+  // ---- corners, newest first
+  if (ref && ref.g === G){
+    const rows = [];
+    for (const c of ref.corners){
+      if (head < c.to || (!fromLine && c.from < d.start) || cur.t[c.from] == null || cur.t[c.to] == null) continue;
+      let mn = Infinity; for (let i = c.entry; i <= c.exit; i++) if (cur.spd[i] != null) mn = Math.min(mn, cur.spd[i]);
+      rows.push({n:c.n, mn, dv: mn - c.min, dt: (cur.t[c.to] - cur.t[c.from]) - c.ms});
+    }
+    const next = ref.corners.find(c => head < c.to);
+    E.corners.replaceChildren(h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Turn"), h("th", {class:"r"}, "Slowest"), h("th", {class:"r"}, "Against best"), h("th", {class:"r"}, "Time against best"))),
+      h("tbody", {}, next ? h("tr", {}, h("td", {}, `Turn ${next.n}`), h("td", {class:"r", style:"color:var(--muted)"}, head >= next.from ? "in it now" : "next"), h("td", {}), h("td", {})) : null,
+        rows.reverse().map(r => h("tr", {}, h("td", {}, `Turn ${r.n}`), h("td", {class:"r"}, spdU(r.mn).toFixed(0)),
+          h("td", {class:"r", style:`color:${r.dv >= 0 ? UP : "var(--critical)"}`}, `${r.dv >= 0 ? "+" : "−"}${Math.abs(spdU(r.dv)).toFixed(0)}`),
+          h("td", {class:"r", style:`color:${r.dt <= 0 ? UP : "var(--critical)"}`}, `${signed(r.dt, 2)} s`))))));
+  } else E.corners.replaceChildren(h("div", {class:"empty"}, "Corners are scored once there is a recorded lap to measure against."));
+
+  // ---- traces against distance round the lap
+  const TW = Math.max(420, E.traces.clientWidth || 900), m = {l:46, r:12}, pw = TW - m.l - m.r, xAt = i => m.l + pw * i / (G - 1);
+  const charts = [
+    {title:`Speed (${unit()})`, hgt:150, cur:cur.spd.map(v => v == null ? null : spdU(v)), ref:ref && ref.g === G ? ref.spd.map(spdU) : null},
+    {title:"Throttle and brake (%)", hgt:80, cur:cur.thr.map(v => v == null ? null : v * 100), cur2:cur.brk.map(v => v == null ? null : v * 100), fixed:[0, 100]},
+    {title:"Gear", hgt:64, cur:cur.gear, ref:ref && ref.g === G ? ref.gear : null, stepped:true},
+    ref && ref.g === G && fromLine ? {title:"Time against your best lap (s): above the line is slower", hgt:80, cur:cur.t.map((v, i) => v == null ? null : (v - ref.t[i]) / 1000), zero:true} : null,
+  ].filter(Boolean);
+  const out = [];
+  for (const c of charts){
+    const top = 12, ph = c.hgt - top, all = [...c.cur, ...(c.ref || []), ...(c.cur2 || [])].filter(v => v != null);
+    let lo = c.fixed ? c.fixed[0] : Math.min(...all, 0), hi = c.fixed ? c.fixed[1] : Math.max(...all, 1);
+    if (c.zero){ const mx = Math.max(Math.abs(lo), Math.abs(hi), 0.2); lo = -mx; hi = mx; }
+    const Y = v => top + ph * (1 - (v - lo) / Math.max(1e-6, hi - lo));
+    const svg = sv("svg", {viewBox:`0 0 ${TW} ${c.hgt + 6}`, width:"100%", height:c.hgt + 6, role:"img", "aria-label":c.title});
+    for (const v of c.zero ? [lo, 0, hi] : [lo, (lo + hi) / 2, hi])
+      svg.append(sv("line", {x1:m.l, x2:TW - m.r, y1:Y(v), y2:Y(v), stroke: c.zero && v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width":1}),
+                 sv("text", {x:m.l - 6, y:Y(v) + 4, "text-anchor":"end"}, c.zero ? (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) : v.toFixed(0)));
+    if (ref && ref.g === G) for (const k of ref.corners) svg.append(sv("line", {x1:xAt(k.apex), x2:xAt(k.apex), y1:top, y2:top + ph, stroke:"var(--grid)", "stroke-width":1}));
+    const path = (vals, color, w) => { let dd = "", pen = false;
+      vals.forEach((v, i) => { if (v == null){ pen = false; return; } dd += `${pen ? (c.stepped ? `H${xAt(i).toFixed(1)}V` : "L") : "M"}${c.stepped && pen ? "" : xAt(i).toFixed(1) + ","}${Y(v).toFixed(1)}`; pen = true; });
+      if (dd) svg.append(sv("path", {d:dd, fill:"none", stroke:color, "stroke-width":w, "stroke-linejoin":"round"})); };
+    if (c.ref) path(c.ref, "var(--deemph)", 1.5);
+    if (c.cur2) path(c.cur2, "var(--critical)", 2);
+    path(c.cur, c.cur2 ? "var(--up)" : "var(--s1)", 2);
+    if (head >= 0) svg.append(sv("line", {x1:xAt(head), x2:xAt(head), y1:top, y2:top + ph, stroke:"var(--ink)", "stroke-width":1}));
+    out.push(h("div", {class:"chart-title"}, c.title), svg);
+  }
+  E.traces.replaceChildren(...out);
 }
 
 // --------------------------------------------------------------- status ---

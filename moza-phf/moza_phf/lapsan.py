@@ -454,3 +454,35 @@ def overlay(track: str, car: str, limit: int = 12, clean: bool = True) -> dict |
             "brake": [round(statistics.fmean(v), 2) for v in brk],
             "mean_ms": round(statistics.fmean(times)), "sd_ms": round(statistics.pstdev(times)), "worst_ms": max(times),
             "corners": rows, "laps": laps, "runs": run_rows(track, car)}
+
+
+def reference(track: str, car: str, g: int = 500) -> dict | None:
+    """What the live view measures the lap in progress against: the best lap on record, on g steps of track
+    position, with its corners, and the best time ever set through each of the 25 slices of the lap."""
+    mine = annotate([m for m in index() if m["track"] == track and m["car"] == car])
+    if not mine:
+        return None
+    best_meta = min(mine, key=pace)
+    best = load(best_meta["id"])
+    if not best:
+        return None
+    n = best["n"]
+    step = max(1, n // g)
+    idx = range(0, n, step)
+    dist = distance(best)
+    cs = corners(best, dist)
+    pool = [l for m in mine[-60:] if (l := load(m["id"])) and l["n"] == n]
+    minis = [mini_times(l) for l in pool]
+    rows = []
+    for c in cs:
+        seg = range(c["entry"], c["exit"] + 1)
+        rows.append({"n": c["n"], "from": c["from"] // step, "to": c["to"] // step, "apex": c["apex"] // step,
+                     "entry": c["entry"] // step, "exit": c["exit"] // step, "at_m": round(dist[c["apex"]]),
+                     "min": round(min(best["spd"][i] for i in seg), 1), "ms": round(_seg_ms(best, c["from"], c["to"]))})
+    return {"track": track, "car": car, "lap": best_meta, "g": len(idx), "count": len(mine), "length_m": round(dist[-1]),
+            "x": [round(best["x"][i], 1) for i in idx], "z": [round(best["z"][i], 1) for i in idx],
+            "dist": [round(dist[i]) for i in idx], "t": [best["t"][i] for i in idx],
+            "spd": [round(best["spd"][i], 1) for i in idx], "thr": [best["thr"][i] for i in idx],
+            "brk": [best["brk"][i] for i in idx], "gear": [best["gear"][i] for i in idx],
+            "corners": rows, "mini_best": [round(min(col)) for col in zip(*minis)], "mini_lap": [round(v) for v in mini_times(best)]}
+
