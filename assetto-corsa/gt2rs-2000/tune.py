@@ -17,6 +17,7 @@ to an installed copy of the car, so the tune can be rebuilt from the original mo
                 with the patch's "Extra F" switch: a script in the car raises the limit and shortens
                 the final drive by the same factor. Peak power is held from 9,000 to 12,000 rpm.
     sound       backfire from lower revs
+    name        the game's menus call it the 2500hp MONSTER, with figures and curves to match
 
 Every file it changes is first copied to <name>.orig-before-tune (once).
 Run it with the game closed:  python3 tune.py   (or  --data <path to the car's data folder>)
@@ -173,7 +174,8 @@ def revs(k: float, high: int = 0):
         t = set_key(t, "COAST_REF", "TORQUE", round(70 / k, 1))            # same engine braking at the wheels
         for sec in ("TURBO_0", "TURBO_1"):
             t = set_key(t, sec, "REFERENCE_RPM", round(4200 * k))
-        return set_key(t, "DAMAGE", "RPM_THRESHOLD", max(round(7500 * k), high + 500))
+        # downshifts have been seen to carry the engine 1,600 rpm past the high limit, so damage starts well above that
+        return set_key(t, "DAMAGE", "RPM_THRESHOLD", max(round(7500 * k), high + 2500))
     return fn
 
 
@@ -212,6 +214,46 @@ def gearing(k: float):
     return fn
 
 
+def describe(data: Path, k: float, high: int, dry: bool) -> bool:
+    """Give the car a name and figures that match what it now is, in ui/ui_car.json (what the game's menus show).
+    The figures are for the high boost map: power.lut x (1 + boost), boost limited by the turbos' own curve."""
+    path = data.parent / "ui" / "ui_car.json"
+    if not path.exists():
+        return False
+    old = path.read_bytes().decode("utf-8-sig", "surrogateescape")
+    lut = [(float(a), float(b)) for a, b in (line.split("|")[:2] for line in (data / "power.lut").read_text().split() if "|" in line)]
+
+    def base(rpm):
+        for (r0, t0), (r1, t1) in zip(lut, lut[1:]):
+            if r0 <= rpm <= r1:
+                return t0 + (t1 - t0) * (rpm - r0) / (r1 - r0)
+        return lut[-1][1]
+
+    top = high or round(STOCK_LIMITER * k)
+    nm = lambda rpm: base(rpm) * (1 + 2 * min(0.8 * 2.973, 2.40 * min(1.0, (rpm / (4200 * k)) ** 2.2)))
+    revs_ = list(range(0, top + 1, 250))
+    torque = [[float(r), round(nm(r), 1)] for r in revs_]
+    power = [[float(r), round(nm(r) * r / 7121, 1)] for r in revs_]
+    peak_hp, peak_nm = max(p[1] for p in power), max(q[1] for q in torque)
+    new = re.sub(r'("name"\s*:\s*")[^"]*(")', lambda m: m.group(1) + "Porsche 911 GT2 RS | 2500hp MONSTER" + m.group(2), old, count=1)
+    new = re.sub(r'("description"\s*:\s*")[^"]*(")', lambda m: m.group(1) + "Track build of the 991 GT2 RS: twin turbos at up to 69 psi, "
+                 f"{peak_hp:,.0f} hp on the high map and 2,000 on the low one, slicks, three times the downforce, revs to {top:,} rpm. "
+                 "Not online-legal (modified data)." + m.group(2), new, count=1)
+    for key, value in (("bhp", f"{round(peak_hp, -1):.0f} bhp"), ("torque", f"{peak_nm * 0.73756:,.0f} lb-ft"), ("topspeed", "264 mph"),
+                       ("pwratio", f"{1480 / peak_hp:.2f} kg/hp")):
+        new = re.sub(r'("%s"\s*:\s*")[^"]*(")' % key, lambda m, v=value: m.group(1) + v + m.group(2), new, count=1)
+    for key, rows in (("torqueCurve", torque), ("powerCurve", power)):
+        body = ",".join("[%s,%s]" % (r, v) for r, v in rows)
+        new = re.sub(r'("%s"\s*:\s*)\[.*?\]\s*\](?=\s*[,}])' % key, lambda m, b=body: m.group(1) + "[" + b + "]", new, count=1, flags=re.S)
+    if new == old:
+        return False
+    if not dry:
+        if not (path.parent / (path.name + BACKUP)).exists():
+            shutil.copy2(path, path.parent / (path.name + BACKUP))
+        path.write_bytes(new.encode("utf-8", "surrogateescape"))
+    return True
+
+
 def sound(t: str) -> str:
     return set_key(t, "BACKFIRE", "MINRPM", 2800)
 
@@ -248,6 +290,8 @@ def main():
         car.write("script.lua", SCRIPT % dict(switch=SWITCH, low=a.redline, high=high, final=round(4.09 * k, 3)))
     elif (a.data / "script.lua").exists() and "written by tune.py" in (a.data / "script.lua").read_text():
         car.park("script.lua")
+    if describe(a.data, k, high, a.dry_run):
+        car.changed.append("ui/ui_car.json (name and figures)")
     print(("would change: " if a.dry_run else "changed: ") + (", ".join(car.changed) or "nothing, already tuned"))
 
 

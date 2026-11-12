@@ -1,4 +1,4 @@
-# GT2 RS "2000 hp" track build
+# GT2 RS track build: the "2500hp MONSTER"
 
 Car: the mod `porsche_911_gt2_rs_wss_2000` (a 991 GT2 RS). The mod's files are not in
 this repository; `tune.py` makes the edits below to an installed copy and keeps the
@@ -11,7 +11,8 @@ originals beside them as `<name>.orig-before-tune`. Run it with the game closed.
 | Slicks | third tyre compound, grip about 1.76-1.82 (Cup 2: 1.58) | 2:03.624 |
 | Downforce | front, rear and diffuser lift x3, springs 68/79 -> 110/150 kN/m | 2:00.510 |
 | Power | about 1,880 hp as first driven (see below), stronger clutch, longer 7th | 2:00.844, 260 mph |
-| Redline | 9,000 rpm, maps corrected to 2,000 and 2,520 hp | not yet driven |
+| Redline 9,000 rpm | maps corrected to 2,000 and 2,520 hp | 1:54.338, 259 mph |
+| Redline 12,000 rpm | switched while driving; full power held from 9,000 to 12,000 | 1:57.546, 264 mph (see below) |
 
 What the recorded laps showed along the way:
 
@@ -30,6 +31,14 @@ What the recorded laps showed along the way:
 - Redline: `--redline` moves the rev limit (9,000 by default; the mod's is 7,200). The torque curve is stretched up
   the rev range and the final drive shortened by the same factor, so power and the speed in each gear are unchanged
   and only the revs rise.
+
+- On the 12,000 rpm lap, one corner (Turn 2, taken at 24 mph instead of 51) cost 4.2 s. The other eleven corners
+  together were 1.0 s quicker than on the 1:54.338 lap, and its middle sector (42.970) is the best recorded.
+  Best sectors added together: 1:53.374.
+- Where the time still is: traction control cuts power for 13 to 16 s a lap at full throttle, nearly all of it in
+  gears 1 to 4; 7th gear runs into the limiter at 264 mph; and only about 28% of the load is on the front axle above 200 mph.
+- `tune.py` also renames the car in the game's menus to "2500hp MONSTER" with matching figures. The folder name keeps
+  its `_2000`, because setups, saved laps and the sound file are all tied to it.
 
 The brake pedal change is in the game's own `cfg/controls.ini`: `[BRAKES] MAX=0.88`, because a stiff brake spring
 kept the pedal from ever reading 100%.
