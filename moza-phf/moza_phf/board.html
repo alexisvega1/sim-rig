@@ -145,6 +145,13 @@
   .scale .sw i{width:14px; height:6px; border-radius:3px}
   .legend .kline.one{background:var(--s1)}
   .chart-title{font-size:12.5px; color:var(--ink2); margin:10px 0 0}
+  .heat{border-collapse:separate; border-spacing:2px; width:100%; font-variant-numeric:tabular-nums}
+  .heat th, .heat td{border:0; padding:5px 6px; text-align:center; font-size:12.5px; white-space:nowrap}
+  .heat th:first-child, .heat td:first-child{text-align:left; padding-left:0; color:var(--ink2)}
+  .heat td.c{border-radius:4px; color:var(--ink); min-width:46px}
+  .heat tr.foot td{color:var(--ink2); border-top:1px solid var(--axis); border-radius:0}
+  .heat .tag{font-size:11px; color:var(--muted); margin-left:6px}
+  .legend .kline.all{background:var(--deemph)}
   td .mini{display:inline-block; height:8px; background:var(--s1); border-radius:0 4px 4px 0; vertical-align:middle; margin-right:8px; min-width:0}
 </style>
 </head>
@@ -159,12 +166,14 @@
   <button role="tab" data-tab="lights" aria-selected="false">Rev lights</button>
   <button role="tab" data-tab="laps" aria-selected="false">Lap times</button>
   <button role="tab" data-tab="track" aria-selected="false">Track map</button>
+  <button role="tab" data-tab="overlay" aria-selected="false">All laps</button>
 </nav>
 <main>
   <section id="tab-haptics"></section>
   <section id="tab-lights" hidden></section>
   <section id="tab-laps" hidden></section>
   <section id="tab-track" hidden></section>
+  <section id="tab-overlay" hidden></section>
 </main>
 <div id="tip" role="tooltip"></div>
 
@@ -211,12 +220,13 @@ function save(reconcile){
 }
 
 // ------------------------------------------------------------------ tabs ---
-const TABS = ["haptics", "lights", "laps", "track"];
+const TABS = ["haptics", "lights", "laps", "track", "overlay"];
 function showTab(name){
   for (const b of document.querySelectorAll("nav button")) b.setAttribute("aria-selected", b.dataset.tab === name);
   for (const t of TABS) $("#tab-" + t).hidden = t !== name;
   if (name === "laps") drawLaps();
   if (name === "track") drawTrack();
+  if (name === "overlay") drawOverlay();
   try { localStorage.setItem("rig_tab", name); } catch (e) {}
 }
 for (const b of document.querySelectorAll("nav button")) b.addEventListener("click", () => showTab(b.dataset.tab));
@@ -858,6 +868,248 @@ function sliceChart(holder, a){
   holder.append(svg);
 }
 
+// --------------------------------------------------------------- all laps ---
+// Several laps laid over one another: how fast, where the brakes go on, and how much each varies.
+let ov = null;
+const ovs = {track:null, car:null, laps:12, all:false, mode:"speed"};
+try { ovs.mode = localStorage.getItem("rig_ovmode") || "speed"; } catch (e) {}
+const brakeStops = () => isDark() ? ["#5a2410", "#933612", "#d95926", "#ee8a62", "#f7bfa7"] : ["#f6c4ae", "#f09a76", "#eb6834", "#c44e1f", "#933612"];
+
+async function drawOverlay(){
+  const root = $("#tab-overlay");
+  let d = null;
+  try { d = await api("/api/rec/laps"); } catch (e) {}
+  if (!d || !d.laps || !d.laps.length){
+    root.replaceChildren(h("div", {class:"card"}, h("h2", {}, "No recorded laps yet"),
+      h("p", {class:"sub"}, "The recorder saves a lap each time you cross the line with MOZA Rig running. Two laps in the same car are enough to start comparing them here.")));
+    return;
+  }
+  rec = d;
+  for (const l of rec.laps) carNames[l.car] = l.carName;
+  const last = rec.laps[rec.laps.length - 1];
+  if (!ovs.track || !rec.laps.some(l => l.track === ovs.track && l.car === ovs.car)){ ovs.track = last.track; ovs.car = last.car; }
+  const q = new URLSearchParams({track:ovs.track, car:ovs.car, laps:ovs.laps});
+  if (ovs.all) q.set("all", "1");
+  let a = null;
+  try { a = await api("/api/rec/overlay?" + q); } catch (e) {}
+  if (!a || !a.laps){
+    root.replaceChildren(h("div", {class:"card empty"}, a && a.error && a.error !== "not found" ? a.error
+      : "This page is newer than the board program that is running. Start MOZA Rig from the Desktop again and this tab will fill in."));
+    return;
+  }
+  ov = a;
+  renderOverlay();
+}
+
+function renderOverlay(){
+  const root = $("#tab-overlay"), a = ov;
+  root.replaceChildren();
+  const tracks = [...new Map(rec.laps.map(l => [l.track, l.trackName])).entries()];
+  const cars = [...new Map(rec.laps.filter(l => l.track === ovs.track).map(l => [l.car, l.carName])).entries()];
+  root.append(h("div", {class:"filters"},
+    h("label", {}, "Track", h("select", {onchange: e => { ovs.track = e.target.value; ovs.car = null; drawOverlay(); }},
+      tracks.map(([id, n]) => h("option", {value:id, selected:id === ovs.track}, n)))),
+    h("label", {}, "Car", h("select", {onchange: e => { ovs.car = e.target.value; drawOverlay(); }},
+      cars.map(([id, n]) => h("option", {value:id, selected:id === ovs.car}, n)))),
+    h("label", {}, "Laps", h("select", {onchange: e => { ovs.laps = +e.target.value; drawOverlay(); }},
+      [6, 12, 20, 40].map(v => h("option", {value:v, selected:v === ovs.laps}, `Last ${v}`)))),
+    h("label", {class:"check"}, h("input", {type:"checkbox", checked: ovs.all, onchange: e => { ovs.all = e.target.checked; drawOverlay(); }}), "Include spins and slow laps"),
+    h("label", {}, "Speeds in", h("select", {onchange: e => { trk.mph = e.target.value === "mph";
+        try { localStorage.setItem("rig_units", trk.mph ? "mph" : "kmh"); } catch (er) {} renderOverlay(); }},
+      h("option", {value:"mph", selected: trk.mph}, "mph"), h("option", {value:"kmh", selected: !trk.mph}, "km/h"))),
+    h("div", {class:"small", style:"margin-left:auto; padding-bottom:6px"},
+      `${a.count} of your ${a.total} laps shown` + (a.left_out ? ` · ${a.left_out} left out for being more than 7% off the best` : ""))));
+
+  const gain = a.corners.length ? a.corners.reduce((p, c) => c.mean_lost_ms > p.mean_lost_ms ? c : p) : null;
+  const loose = a.corners.length ? a.corners.reduce((p, c) => c.sd_ms > p.sd_ms ? c : p) : null;
+  const tile = (k, v, n) => h("div", {class:"tile"}, h("div", {class:"k"}, k), h("div", {class:"v"}, v), h("div", {class:"n"}, n));
+  root.append(h("div", {class:"tiles"},
+    tile("Best of these", fmtLap(a.best.ms), fmtDateLong(a.best.date)),
+    tile("Average lap", fmtLap(a.mean_ms), `${fmtSec(a.mean_ms - a.best.ms)} s off the best`),
+    tile("Lap to lap", `±${(a.sd_ms / 1000).toFixed(2)} s`, `Slowest shown ${fmtLap(a.worst_ms)}`),
+    gain ? tile("Most to gain", `Turn ${gain.n}`, `${fmtSec(gain.mean_lost_ms)} s a lap on average against your quickest pass`) : null,
+    loose ? tile("Least consistent", `Turn ${loose.n}`, `Its time varies by ±${(loose.sd_ms / 1000).toFixed(2)} s from lap to lap`) : null));
+
+  const hover = {fns:[]};
+  const cornerAt = i => a.corners.find(c => i >= c.from && i < c.to);
+  hover.at = (i, x, y) => {
+    for (const f of hover.fns) f(i);
+    if (i == null) return hideTip();
+    const c = cornerAt(i);
+    showTip(x, y, `${spdU(a.mean_spd[i]).toFixed(0)} ${unit()} on average`, [
+      `From ${spdU(a.min_spd[i]).toFixed(0)} to ${spdU(a.max_spd[i]).toFixed(0)} ${unit()} across these laps`,
+      `Varies by ±${spdU(a.sd_spd[i]).toFixed(1)} ${unit()}`,
+      `Brake ${Math.round(a.brake[i] * 100)}% on average`,
+      `${a.dist[i].toLocaleString()} m from the line${c ? ` · Turn ${c.n}` : ""}`]);
+  };
+
+  const setMode = v => { ovs.mode = v; try { localStorage.setItem("rig_ovmode", v); } catch (e) {} renderOverlay(); };
+  const modeSub = {speed:"Coloured by your average speed over these laps.",
+    brake:"Coloured by how hard you brake on average. The dark bar beside the line spans your earliest to latest braking point for that corner.",
+    spread:"Coloured by how much your speed varies from lap to lap. Pale is where you do the same thing every lap."}[ovs.mode];
+  const mapCard = h("div", {class:"card"},
+    h("div", {class:"row-head", style:"flex-wrap:nowrap; align-items:flex-start"}, h("div", {}, h("h2", {}, "All laps on one map"), h("p", {class:"sub"}, modeSub)),
+      h("label", {class:"small", style:"display:flex; flex-direction:column; gap:3px"}, "Colour by",
+        h("select", {onchange: e => setMode(e.target.value)},
+          [["speed", "Speed"], ["brake", "Braking"], ["spread", "Consistency"]].map(([v, n]) => h("option", {value:v, selected:v === ovs.mode}, n))))));
+  const mapHolder = h("div"); mapCard.append(mapHolder);
+
+  const list = h("div", {class:"card"}, h("h2", {}, "Corners, worst first"),
+    h("p", {class:"sub"}, "Average time lost against your quickest pass, how much the corner varies, and how far apart your braking points are."));
+  const order = [...a.corners].sort((p, q) => q.mean_lost_ms - p.mean_lost_ms), maxLost = Math.max(100, ...a.corners.map(c => c.mean_lost_ms));
+  list.append(h("div", {class:"scroll", style:"max-height:470px"}, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Turn"), h("th", {}, "Lost a lap"),
+      h("th", {class:"r"}, "Varies"), h("th", {class:"r"}, "Braking points"))),
+    h("tbody", {}, order.map(c => h("tr", {}, h("td", {}, `Turn ${c.n}`),
+      h("td", {class:"num"}, h("span", {class:"mini", style:`width:${Math.max(0, 60 * c.mean_lost_ms / maxLost)}px`}), `${fmtSec(c.mean_lost_ms)} s`),
+      h("td", {class:"r"}, `±${(c.sd_ms / 1000).toFixed(2)} s`),
+      h("td", {class:"r"}, c.brake_spread_m == null ? "no braking" : `${c.brake_spread_m} m apart`)))))));
+  root.append(h("div", {class:"two"}, mapCard, list));
+  overlayMap(mapHolder, a, hover);
+
+  const tr = h("div", {class:"card"}, h("h2", {}, "Every lap, speed against distance"),
+    h("p", {class:"sub"}, "Where the lines sit on top of each other you are consistent. Where they fan out, something changes from lap to lap."),
+    h("div", {class:"legend"}, h("span", {}, h("i", {class:"kline"}), "Best lap"), h("span", {}, h("i", {class:"kline one"}), "Latest lap"),
+      h("span", {}, h("i", {class:"kline all"}), "The others")));
+  const trHolder = h("div"); tr.append(trHolder); root.append(tr);
+  overlayTraces(trHolder, a, hover);
+
+  if (a.corners.length){
+    const worst = Math.max(300, ...a.laps.flatMap(l => l.lost_ms));
+    const shade = ms => `background:color-mix(in srgb, var(--s1) ${Math.round(70 * Math.min(1, Math.max(0, ms) / worst))}%, transparent)`;
+    const rows = [...a.laps].reverse();
+    root.append(h("div", {class:"card"}, h("h2", {}, "Lap by corner"),
+      h("p", {class:"sub"}, "Seconds lost in each corner against the quickest pass among these laps. A column that is dark all the way down is a corner to work on; one dark cell is a mistake."),
+      h("div", {class:"scroll", style:"max-height:none; overflow-x:auto"}, h("table", {class:"heat"},
+        h("thead", {}, h("tr", {}, h("th", {}, "Lap"), a.corners.map(c => h("th", {}, `T${c.n}`)))),
+        h("tbody", {}, rows.map(l => h("tr", {}, h("td", {}, fmtLap(l.ms), h("span", {class:"tag"}, (l.id === a.best.id ? "best · " : "") + new Date(l.date).toLocaleString(undefined, {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}))),
+            l.lost_ms.map(ms => h("td", {class:"c", style:shade(ms), title: ms ? `${fmtSec(ms)} s slower than the quickest pass` : "The quickest pass of these laps"}, ms ? `+${(ms / 1000).toFixed(2)}` : "best")))),
+          h("tr", {class:"foot"}, h("td", {}, "Average"), a.corners.map(c => h("td", {}, `+${(c.mean_lost_ms / 1000).toFixed(2)}`))),
+          h("tr", {class:"foot"}, h("td", {}, "Varies by"), a.corners.map(c => h("td", {}, `±${(c.sd_ms / 1000).toFixed(2)}`))))))));
+  }
+}
+
+function overlayMap(holder, a, hover){
+  if (!a.has_map){ holder.append(h("div", {class:"empty"}, "The game didn't send the car's position for these laps, so there is no map. The chart below still works.")); return; }
+  const n = a.n, X = a.x, Z = a.z, pad = 34;
+  const W = Math.max(320, holder.clientWidth || 600), H = Math.round(Math.min(520, W * 0.78));
+  const x0 = Math.min(...X), x1 = Math.max(...X), z0 = Math.min(...Z), z1 = Math.max(...Z);
+  const s = Math.min((W - 2 * pad) / Math.max(1, x1 - x0), (H - 2 * pad) / Math.max(1, z1 - z0));
+  const ox = (W - (x1 - x0) * s) / 2, oz = (H - (z1 - z0) * s) / 2;
+  const px = i => ox + (X[i] - x0) * s, py = i => oz + (Z[i] - z0) * s;
+  let col, legend;
+  if (ovs.mode === "brake"){
+    const stops = brakeStops();
+    col = i => a.brake[i] < 0.03 ? "var(--deemph)" : mix(stops, a.brake[i]);
+    legend = h("div", {class:"scale"}, "Light braking", h("div", {class:"grad", style:`background:linear-gradient(90deg, ${stops.join(",")})`}), "Full pedal",
+      h("span", {class:"sw", style:"margin-left:14px"}, h("i", {style:"background:var(--deemph)"}), "Off the brakes"),
+      h("span", {class:"sw"}, h("i", {style:"background:var(--ink)"}), "Earliest to latest braking point"));
+  } else if (ovs.mode === "spread"){
+    const sorted = [...a.sd_spd].sort((p, q) => p - q), hi = Math.max(1, sorted[Math.floor(n * 0.98)]), stops = isDark() ? seqStops() : seqStops();
+    const ramp = isDark() ? ["#262624", "#184f95", "#3987e5", "#9ec5f4"] : ["#ecebe6", "#9ec5f4", "#3987e5", "#0d366b"];
+    col = i => mix(ramp, a.sd_spd[i] / hi);
+    legend = h("div", {class:"scale"}, "The same every lap", h("div", {class:"grad", style:`background:linear-gradient(90deg, ${ramp.join(",")})`}),
+      `Varies by ±${spdU(hi).toFixed(0)} ${unit()} or more`);
+  } else {
+    const lo = Math.min(...a.mean_spd), hi = Math.max(...a.mean_spd), stops = seqStops();
+    col = i => mix(stops, (a.mean_spd[i] - lo) / Math.max(1, hi - lo));
+    legend = h("div", {class:"scale"}, `${spdU(lo).toFixed(0)} ${unit()}`,
+      h("div", {class:"grad", style:`background:linear-gradient(90deg, ${stops.join(",")})`}), `${spdU(hi).toFixed(0)} ${unit()}`);
+  }
+  const svg = sv("svg", {viewBox:`0 0 ${W} ${H}`, width:"100%", height:H, role:"img", "aria-label":"Map of the track, coloured from all the laps shown"});
+  const pts = Array.from({length:n}, (_, i) => `${px(i).toFixed(1)},${py(i).toFixed(1)}`).join(" ");
+  svg.append(sv("polygon", {points:pts, fill:"none", stroke:"var(--track)", "stroke-width":14, "stroke-linejoin":"round"}));
+  for (let i = 0; i < n; i++){
+    const j = (i + 1) % n;
+    svg.append(sv("line", {x1:px(i).toFixed(1), y1:py(i).toFixed(1), x2:px(j).toFixed(1), y2:py(j).toFixed(1), stroke:col(i), "stroke-width":6, "stroke-linecap":"round"}));
+  }
+  const cx = X.reduce((p, q) => p + q, 0) / n, cz = Z.reduce((p, q) => p + q, 0) / n;
+  const out = (i, d) => { const vx = X[i] - cx, vz = Z[i] - cz, m = Math.hypot(vx, vz) || 1; return [px(i) + d * vx / m, py(i) + d * vz / m]; };
+  if (ovs.mode === "brake"){                                  // the stretch of track over which the brakes first go on, lap to lap
+    a.corners.forEach((c, k) => {
+      const at = a.laps.map(l => l.brake_at[k]).filter(v => v != null);
+      if (!at.length) return;
+      const lo = Math.min(...at), hi = Math.max(Math.max(...at), lo + 1), side = [];
+      for (let i = lo; i <= Math.min(n - 1, hi); i++){
+        const p = Math.max(0, i - 1), q = Math.min(n - 1, i + 1), dx = px(q) - px(p), dy = py(q) - py(p), m = Math.hypot(dx, dy) || 1;
+        side.push(`${(px(i) - 9 * dy / m).toFixed(1)},${(py(i) + 9 * dx / m).toFixed(1)}`);
+      }
+      svg.append(sv("polyline", {points:side.join(" "), fill:"none", stroke:"var(--ink)", "stroke-width":3, "stroke-linecap":"round"}));
+    });
+  }
+  for (const c of a.corners){
+    const [tx, ty] = out(Math.min(n - 1, c.apex), 22);
+    svg.append(sv("text", {x:tx, y:ty + 4, "text-anchor":"middle", class:"lbl"}, `T${c.n}`));
+  }
+  const [sx, sy] = out(0, -20);
+  svg.append(sv("circle", {cx:px(0), cy:py(0), r:5, fill:"var(--ink)", stroke:"var(--surface)", "stroke-width":2}),
+             sv("text", {x:sx, y:sy + 4, "text-anchor":"middle", class:"lbl"}, "Start"));
+  const dot = sv("circle", {r:7, fill:"var(--ink)", stroke:"var(--surface)", "stroke-width":2, visibility:"hidden"});
+  svg.append(dot);
+  hover.fns.push(i => { if (i == null) return dot.setAttribute("visibility", "hidden");
+    dot.setAttribute("cx", px(i)); dot.setAttribute("cy", py(i)); dot.setAttribute("visibility", "visible"); });
+  svg.addEventListener("pointermove", e => {
+    const b = svg.getBoundingClientRect(), mx = (e.clientX - b.left) * W / b.width, my = (e.clientY - b.top) * H / b.height;
+    let best = -1, bd = 45 * 45;
+    for (let i = 0; i < n; i++){ const d = (px(i) - mx) ** 2 + (py(i) - my) ** 2; if (d < bd){ bd = d; best = i; } }
+    hover.at(best < 0 ? null : best, e.clientX, e.clientY);
+  });
+  svg.addEventListener("pointerleave", () => hover.at(null));
+  holder.append(svg, legend);
+}
+
+function overlayTraces(holder, a, hover){
+  const n = a.n, W = Math.max(420, holder.clientWidth || 900), m = {l:52, r:14}, pw = W - m.l - m.r;
+  const total = Math.max(1, a.dist[n - 1]), xAt = i => m.l + pw * a.dist[i] / total;
+  const others = a.laps.filter(l => l.id !== a.best.id && l.id !== a.latest.id);
+  const best = a.laps.find(l => l.id === a.best.id), latest = a.laps.find(l => l.id === a.latest.id);
+  const lines = others.map(l => ({v:l.spd.map(spdU), c:"var(--deemph)", w:1, o:.7}));
+  if (latest && latest !== best) lines.push({v:latest.spd.map(spdU), c:"var(--s1)", w:2, o:1});
+  if (best) lines.push({v:best.spd.map(spdU), c:"var(--s2)", w:2, o:1});
+  const charts = [
+    {title:`Speed (${unit()})`, h:230, lines, marks:true},
+    {title:`How much your speed varies from lap to lap (± ${unit()})`, h:96, lines:[{v:a.sd_spd.map(spdU), c:"var(--s1)", w:2, o:1}], wash:true, zero:true, axis:true},
+  ];
+  for (const c of charts){
+    const H = c.h + (c.axis ? 26 : 8), top = 14, ph = c.h - top;
+    let lo = c.zero ? 0 : Math.min(...c.lines.flatMap(l => l.v)), hi = Math.max(...c.lines.flatMap(l => l.v), lo + 1);
+    const step = [1, 2, 5, 10, 20, 50, 100].find(sx => (hi - lo) / sx <= 5) || 200;
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const Y = v => top + ph * (1 - (v - lo) / (hi - lo));
+    const svg = sv("svg", {viewBox:`0 0 ${W} ${H}`, width:"100%", height:H, role:"img", "aria-label":c.title});
+    for (let v = lo; v <= hi + 1e-9; v += step)
+      svg.append(sv("line", {x1:m.l, x2:W - m.r, y1:Y(v), y2:Y(v), stroke: c.zero && v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width":1}),
+                 sv("text", {x:m.l - 8, y:Y(v) + 4, "text-anchor":"end"}, v.toFixed(0)));
+    for (const k of a.corners){
+      const i = Math.min(n - 1, k.apex);
+      svg.append(sv("line", {x1:xAt(i), x2:xAt(i), y1:top, y2:top + ph, stroke:"var(--grid)", "stroke-width":1}));
+      if (c.marks) svg.append(sv("text", {x:xAt(i), y:10, "text-anchor":"middle"}, `T${k.n}`));
+    }
+    for (const l of c.lines){
+      const d = l.v.map((v, i) => `${i ? "L" : "M"}${xAt(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+      if (c.wash) svg.append(sv("path", {d: d + `L${xAt(n - 1)},${Y(0)}L${xAt(0)},${Y(0)}Z`, fill:"var(--wash)"}));
+      svg.append(sv("path", {d, fill:"none", stroke:l.c, "stroke-width":l.w, "stroke-opacity":l.o, "stroke-linejoin":"round", "stroke-linecap":"round"}));
+    }
+    if (c.axis){
+      const ds = [100, 200, 250, 500, 1000, 2000, 2500, 5000].find(sx => total / sx <= 9) || 10000;
+      for (let dm = 0; dm <= total; dm += ds)
+        svg.append(sv("text", {x:m.l + pw * dm / total, y:c.h + 16, "text-anchor":"middle"}, dm >= 1000 ? `${(dm / 1000).toFixed(dm % 1000 ? 1 : 0)} km` : `${dm} m`));
+    }
+    const cross = sv("line", {y1:top, y2:top + ph, stroke:"var(--axis)", "stroke-width":1, visibility:"hidden"});
+    const hit = sv("rect", {x:m.l, y:0, width:pw, height:c.h, fill:"transparent"});
+    hover.fns.push(i => { if (i == null) return cross.setAttribute("visibility", "hidden");
+      cross.setAttribute("x1", xAt(i)); cross.setAttribute("x2", xAt(i)); cross.setAttribute("visibility", "visible"); });
+    hit.addEventListener("pointermove", e => {
+      const b = svg.getBoundingClientRect(), target = ((e.clientX - b.left) * W / b.width - m.l) / pw * total;
+      let lo2 = 0, hi2 = n - 1;
+      while (lo2 < hi2){ const mid = (lo2 + hi2) >> 1; if (a.dist[mid] < target) lo2 = mid + 1; else hi2 = mid; }
+      hover.at(lo2, e.clientX, e.clientY);
+    });
+    hit.addEventListener("pointerleave", () => hover.at(null));
+    svg.append(cross, hit);
+    holder.append(h("div", {class:"chart-title"}, c.title), svg);
+  }
+}
+
 // --------------------------------------------------------------- status ---
 function chips(){
   const d = st.dash, hp = st.haptics, onTrack = d && d.connected && d.car;
@@ -896,9 +1148,15 @@ async function poll(){
     const d = await api("/api/rec/laps");
     if (d.laps && d.laps.length !== rec.laps.length) drawTrack();
   }, 5000);
+  setInterval(async () => {                                              // the same for the all-laps view
+    if ($("#tab-overlay").hidden || !rec) return;
+    const d = await api("/api/rec/laps");
+    if (d.laps && d.laps.length !== rec.laps.length) drawOverlay();
+  }, 5000);
   let rs; addEventListener("resize", () => { clearTimeout(rs); rs = setTimeout(() => {
     if (!$("#tab-laps").hidden) buildLaps();
-    if (!$("#tab-track").hidden && ta && !ta.error) renderTrack(); }, 150); });
+    if (!$("#tab-track").hidden && ta && !ta.error) renderTrack();
+    if (!$("#tab-overlay").hidden && ov) renderOverlay(); }, 150); });
 })();
 </script>
 </body>

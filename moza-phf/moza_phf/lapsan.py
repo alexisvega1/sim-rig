@@ -273,3 +273,56 @@ def tips(a: dict, mph: bool = False) -> list[dict]:
                     "text": f"Your times vary most around {wobble['from_m']:,} m from the line "
                             f"(about ±{wobble['spread_ms'] / 1000:.2f} s lap to lap). That stretch is worth practising on its own."})
     return out
+
+
+# ------------------------------------------------------------- all the laps ---
+def overlay(track: str, car: str, limit: int = 12, clean: bool = True) -> dict | None:
+    """Several laps laid over one another: how fast, where the brakes go on, and how
+    much each of those varies from lap to lap. `clean` leaves out laps more than 7 %
+    off the best (spins and traffic), unless that would leave fewer than two."""
+    mine = [m for m in index() if m["track"] == track and m["car"] == car]
+    if not mine:
+        return None
+    best_meta = min(mine, key=lambda m: m["ms"])
+    ref = load(best_meta["id"])
+    if not ref:
+        return None
+    n = ref["n"]
+    metas = {m["id"]: m for m in mine[-max(2, limit):]}
+    metas[best_meta["id"]] = best_meta
+    pool = [(m, l) for m in sorted(metas.values(), key=lambda m: m["id"]) if (l := load(m["id"])) and l["n"] == n]
+    kept = [(m, l) for m, l in pool if m["ms"] <= best_meta["ms"] * 1.07] if clean else pool
+    if len(kept) < 2:
+        kept = pool
+    dist = distance(ref)
+    cs = corners(ref, dist)
+    step = max(1, n // 500)
+    idx = range(0, n, step)
+    cols = lambda key: [[l[key][i] for _, l in kept] for i in idx]
+    spd = cols("spd")
+    brk = cols("brk")
+    seg = [[_seg_ms(l, c["from"], c["to"]) for c in cs] for _, l in kept]
+    quick = [min(col) for col in zip(*seg)] if cs else []
+    laps = []
+    for (m, l), times in zip(kept, seg):
+        laps.append({**m, "spd": [round(l["spd"][i], 1) for i in idx],
+                     "brake_at": [None if (b := _brake_point(l, c)) is None else b // step for c in cs],
+                     "seg_ms": [round(v) for v in times], "lost_ms": [round(v - q) for v, q in zip(times, quick)]})
+    rows = []
+    for k, c in enumerate(cs):
+        lost = [lap["lost_ms"][k] for lap in laps]
+        marks = [dist[b] for _, l in kept if (b := _brake_point(l, c)) is not None]
+        rows.append({"n": c["n"], "apex": c["apex"] // step, "from": c["from"] // step, "to": c["to"] // step, "at_m": round(dist[c["apex"]]),
+                     "best_ms": round(quick[k]), "mean_lost_ms": round(statistics.fmean(lost)),
+                     "sd_ms": round(statistics.pstdev([lap["seg_ms"][k] for lap in laps])),
+                     "brake_spread_m": round(max(marks) - min(marks)) if len(marks) > 1 else None})
+    times = [m["ms"] for m, _ in kept]
+    return {"track": track, "car": car, "best": best_meta, "latest": kept[-1][0], "count": len(kept), "left_out": len(pool) - len(kept),
+            "total": len(mine), "n": len(idx), "step": step, "length_m": round(dist[-1]),
+            "has_map": max(ref["x"]) - min(ref["x"]) > 5 or max(ref["z"]) - min(ref["z"]) > 5,
+            "x": [round(ref["x"][i], 1) for i in idx], "z": [round(ref["z"][i], 1) for i in idx], "dist": [round(dist[i]) for i in idx],
+            "mean_spd": [round(statistics.fmean(v), 1) for v in spd], "sd_spd": [round(statistics.pstdev(v), 1) for v in spd],
+            "min_spd": [round(min(v), 1) for v in spd], "max_spd": [round(max(v), 1) for v in spd],
+            "brake": [round(statistics.fmean(v), 2) for v in brk],
+            "mean_ms": round(statistics.fmean(times)), "sd_ms": round(statistics.pstdev(times)), "worst_ms": max(times),
+            "corners": rows, "laps": laps}

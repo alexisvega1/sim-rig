@@ -121,6 +121,18 @@ def track_report(query: dict) -> dict | None:
     return a
 
 
+def overlay_report(query: dict) -> dict | None:
+    one = lambda k: (query.get(k) or [None])[0]
+    try:
+        limit = max(2, min(40, int(one("laps") or 12)))
+    except ValueError:
+        limit = 12
+    a = lapsan.overlay(one("track") or "", one("car") or "", limit, clean=one("all") != "1")
+    if a:
+        a["carName"], a["trackName"] = ui_name("car", a["car"]), ui_name("track", a["track"])
+    return a
+
+
 def request_test(effect: str, seconds: float = 1.0) -> dict:
     if effect not in rigcfg.EFFECTS:
         raise ValueError(f"unknown effect {effect!r}")
@@ -172,6 +184,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(recorded())
         if path == "/api/rec/analysis":
             return self._json(track_report(parse_qs(qs)) or {"error": "no recorded laps for that car and track"})
+        if path == "/api/rec/overlay":
+            a = overlay_report(parse_qs(qs))
+            return self._json(a or {"error": "No recorded laps for that car on that track yet."})
         self._json({"error": "not found"}, 404)
 
     def do_POST(self):

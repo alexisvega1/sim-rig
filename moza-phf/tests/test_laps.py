@@ -143,6 +143,22 @@ def test_best_lap_against_itself_and_units(three_laps):
     assert lapsan.analysis("nowhere", "car_a") is None
 
 
+def test_overlay_lays_the_laps_over_one_another(three_laps):
+    a = lapsan.overlay("track_x", "car_a", limit=12, clean=False)
+    assert a["count"] == 3 and a["left_out"] == 0 and a["best"]["ms"] == min(lap["ms"] for lap in three_laps)
+    assert len(a["laps"]) == 3 and all(len(l["spd"]) == a["n"] == len(a["x"]) == len(a["sd_spd"]) for l in a["laps"])
+    worst = max(a["corners"], key=lambda c: c["mean_lost_ms"])
+    assert worst["n"] == 2 and worst["sd_ms"] > 100                         # the corner one lap was made slow in
+    slow = a["laps"][1]                                                     # that lap: all its loss is at turn 2
+    assert slow["lost_ms"][1] > 800 and max(a["sd_spd"]) > 2 and 0 <= min(a["brake"]) and max(a["brake"]) <= 1
+    for k in range(len(a["corners"])):                                      # every corner has one quickest pass
+        assert min(l["lost_ms"][k] for l in a["laps"]) == 0
+    assert all(b is None or 0 <= b < a["n"] for l in a["laps"] for b in l["brake_at"])
+    clean = lapsan.overlay("track_x", "car_a", limit=12, clean=True)
+    assert clean["count"] >= 2 and clean["count"] + clean["left_out"] == 3
+    assert lapsan.overlay("nowhere", "car_a") is None
+
+
 def test_board_serves_recorded_laps(three_laps, tmp_path, monkeypatch):
     monkeypatch.setattr(board, "SESSIONS", tmp_path / "none")
     monkeypatch.setattr(board, "AC_ROOT", tmp_path / "none")
@@ -157,6 +173,8 @@ def test_board_serves_recorded_laps(three_laps, tmp_path, monkeypatch):
         a = get(f"/api/rec/analysis?track=track_x&car=car_a&lap={laps[1]['id']}&units=mph")
         assert a["lap"]["ms"] == three_laps[1]["ms"] and a["tips"] and "mph" in a["tips"][0]["text"] and a["laps"][0]["cuts"] is None
         assert "error" in get("/api/rec/analysis?track=nope&car=car_a")
+        o = get("/api/rec/overlay?track=track_x&car=car_a&laps=6&all=1")
+        assert o["count"] == 3 and o["carName"] == "car_a" and "error" in get("/api/rec/overlay?track=nope&car=car_a")
         assert get("/api/state")["recorder"] is None
     finally:
         srv.shutdown(); srv.server_close()
