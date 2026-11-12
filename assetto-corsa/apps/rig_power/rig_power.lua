@@ -1,6 +1,6 @@
 -- Boost and Power: a boost dial, live horsepower and torque, and the power curve
 -- the car actually makes, filled in as you drive. On cars listed in CARS below it
--- also carries two switches: the engine map (how much boost) and the engine sound.
+-- also carries three switches: the engine map (how much boost), the rev limit and the engine sound.
 --
 -- Engine output is worked out the way Assetto Corsa itself does it: the car's
 -- torque curve (data/power.lut, in N·m) multiplied by (1 + boost), then by how
@@ -14,19 +14,25 @@ local OUT = ROOT .. '/rig_power_telem.txt'
 -- Cars with switches. A map's level is the share of the car's highest boost setting
 -- (engine.ini WASTEGATE) the turbos are allowed to reach; the game keeps it in steps of 0.1.
 -- A sound names the installed car whose engine sounds to borrow; turbo = true also borrows
--- its turbo whistle; top is the highest revs that sound was recorded for.
+-- its turbo whistle, and turboFrom takes the turbo sounds from a different car instead (turboLoud
+-- sets how loud); top is the highest revs that sound was recorded for. revs lists the rev
+-- limits the car's own script (data/script.lua) offers; the second is selected by turning on
+-- the Custom Shaders Patch extra switch numbered revSwitch (0 = A ... 5 = F).
 local CARS = {
   porsche_911_gt2_rs_wss_2000 = {
     maps = {
       { name = '2,000', level = 0.60 },
       { name = '2,500', level = 0.80 },
     },
+    revs = { { name = '9K', rpm = 9000 }, { name = '12K', rpm = 12000 } },
+    revSwitch = 5,
     sounds = {
       { name = '935 TURBO', car = 'ks_porsche_935_78_moby_dick', turbo = true, top = 9300 },
       { name = '911 RSR', car = 'ks_porsche_911_rsr_2017', turbo = false, top = 9000 },
       { name = 'GT1 TURBO', car = 'ks_porsche_911_gt1', turbo = true, top = 8000 },
       { name = '917/30', car = 'ks_porsche_917_30', turbo = true, top = 8500 },
       { name = 'STOCK', top = 7200 },
+      { name = 'RSR + TURBO', car = 'ks_porsche_911_rsr_2017', turboFrom = 'ks_porsche_911_gt1', turboLoud = 2.0, top = 9000 },
     },
   },
 }
@@ -40,7 +46,7 @@ local bins = {}              -- [rpm/100] = best full-throttle torque (lb-ft) se
 local now = { rpm = 0, boost = 0, gas = 0, tq = 0, hp = 0, limiter = 8000, gear = 0 }
 local acc, seq = 0, 0
 
-local store = ac.storage({ map = 1, sound = 1, prevSound = 2, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1 })
+local store = ac.storage({ map = 1, sound = 1, prevSound = 2, rev = 1, mapDev = '', mapBtn = -1, sndDev = '', sndBtn = -1, revDev = '', revBtn = -1 })
 local cfg = nil              -- this car's entry in CARS, if it has one
 local carId = ''
 local started, startWait = false, 0
@@ -50,7 +56,8 @@ local banks = {}             -- [car] = true once its sound file is loaded
 local status = { sound = '', bank = 1, err = '', note = '' }
 local squeezed = false       -- the engine sound's revs are being scaled down to fit the borrowed sound
 local binding, bindTimer, bindSkip = nil, 0, {}
-local held = { map = false, sound = false }
+local held = { map = false, sound = false, rev = false }
+local soundLimiter = 0       -- the rev limit the engine sound was last set up for
 
 local function hex(h, a)
   return rgbm(tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3, 4), 16) / 255, tonumber(h:sub(5, 6), 16) / 255, a or 1)
@@ -99,26 +106,44 @@ local function flipMap()
   ac.log('Boost and Power: map ' .. cfg.maps[store.map].name)
 end
 
+local function applyRev()
+  if cfg == nil or cfg.revs == nil then return end
+  local ok, err = pcall(function() ac.setExtraSwitch(cfg.revSwitch, clampIndex(store.rev, #cfg.revs) == 2) end)
+  if not ok then fail('rev limit', err) end
+end
+
+local function flipRev()
+  if cfg == nil or cfg.revs == nil then return end
+  store.rev = clampIndex(store.rev, #cfg.revs) % #cfg.revs + 1
+  applyRev()
+  resetPeaks()                                          -- the same power now sits at different revs
+  ac.log('Boost and Power: rev limit ' .. cfg.revs[store.rev].name)
+end
+
 local function applySound()
   if cfg == nil then return end
   local s = cfg.sounds[clampIndex(store.sound, #cfg.sounds)]
   local E = ac.CarAudioEventID
-  if s.car ~= nil and not banks[s.car] then
-    local ok, found = pcall(function()
-      return ac.loadSoundbank(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. s.car .. '/sfx/' .. s.car .. '.bank',
-        ROOT .. '/content/sfx/GUIDs.txt')
-    end)
-    banks[s.car] = ok and found ~= false
-    status.bank = banks[s.car] and 1 or 0
-    if not ok then fail('sound file', found) elseif found == false then fail('sound file', 'not found for ' .. s.car) end
+  status.bank = 1
+  for _, donor in ipairs({ s.car or false, s.turboFrom or false }) do
+    if donor and not banks[donor] then
+      local ok, found = pcall(function()
+        return ac.loadSoundbank(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. donor .. '/sfx/' .. donor .. '.bank',
+          ROOT .. '/content/sfx/GUIDs.txt')
+      end)
+      banks[donor] = ok and found ~= false
+      if not ok then fail('sound file', found) elseif found == false then fail('sound file', 'not found for ' .. donor) end
+    end
+    if donor and not banks[donor] then status.bank = 0 end
   end
   local from = '/cars/' .. (s.car or carId) .. '/'
   local own = '/cars/' .. carId .. '/'
+  local turbo = s.turboFrom and ('/cars/' .. s.turboFrom .. '/') or ((s.car ~= nil and s.turbo) and from or own)
   local swaps = {
     { E.EngineExt, from .. 'engine_ext', LOUD.engine }, { E.EngineInt, from .. 'engine_int', LOUD.engine },
     { E.BackfireExt, from .. 'backfire_ext', LOUD.backfire }, { E.BackfireInt, from .. 'backfire_int', LOUD.backfire },
     { E.Limiter, from .. 'limiter', 1 }, { E.GearExt, from .. 'gear_ext', 1 }, { E.GearInt, from .. 'gear_int', 1 },
-    { E.Turbo, ((s.car ~= nil and s.turbo) and from or own) .. 'turbo', LOUD.turbo },
+    { E.Turbo, turbo .. 'turbo', s.turboLoud or LOUD.turbo },
   }
   for i = 1, #swaps do
     local ok, err = pcall(function()
@@ -129,18 +154,23 @@ local function applySound()
   end
   -- A sound recorded for fewer revs than this engine turns is fed scaled revs, so it tops out at the limiter
   -- instead of running off the end of its recording. Sounds that reach the limiter by themselves are left alone.
+  -- The pitch is raised by the same factor (up to 30%), so the note still climbs with the real revs.
   local top = num(s.top)
   local squeeze = top > 0 and now.limiter > top + 50
+  soundLimiter = now.limiter
   if squeeze or squeezed then
     local out = squeeze and top or 30000
     local inp = squeeze and now.limiter or 30000
+    local pitch = squeeze and math.min(1.3, now.limiter / top) or 1
     local ok, err = pcall(function()
-      local lut = ac.Lut(string.format('0 | 0\n%d | %d\n30000 | %d', inp, out, out))
+      local lut = ac.Lut(string.format('0 | 0\n%d | %d\n60000 | %d', inp, out, squeeze and out or 60000), {})   -- the second argument is required
       ac.CarAudioTweak.setParameterTransform(E.EngineExt, 'rpms', lut)
       ac.CarAudioTweak.setParameterTransform(E.EngineInt, 'rpms', lut)
+      ac.CarAudioTweak.setPitch(E.EngineExt, pitch)
+      ac.CarAudioTweak.setPitch(E.EngineInt, pitch)
     end)
     squeezed = squeeze and ok
-    status.note = ok and (squeeze and ('revs scaled to ' .. top) or '') or ('rev scaling failed: ' .. tostring(err))
+    status.note = ok and (squeeze and string.format('revs scaled to %d pitch %.2f', top, pitch) or '') or ('rev scaling failed: ' .. tostring(err))
     if not ok then ac.log('Boost and Power: ' .. status.note) end
   end
   status.sound = s.name
@@ -191,7 +221,9 @@ local function pollWheel(dt)
           bindSkip[d * 1000 + b] = nil
         elseif not bindSkip[d * 1000 + b] then
           local name = ac.getJoystickName(d) or ''
-          if binding == 'map' then store.mapDev, store.mapBtn = name, b else store.sndDev, store.sndBtn = name, b end
+          if binding == 'map' then store.mapDev, store.mapBtn = name, b
+          elseif binding == 'rev' then store.revDev, store.revBtn = name, b
+          else store.sndDev, store.sndBtn = name, b end
           held[binding] = true                          -- wait for release before it counts as a flip
           binding = nil
           return
@@ -209,6 +241,10 @@ local function pollWheel(dt)
   down = d ~= nil and ac.isJoystickButtonPressed(d, store.sndBtn)
   if down and not held.sound then flipSound() end
   held.sound = down
+  d = store.revBtn >= 0 and deviceIndex(store.revDev) or nil
+  down = d ~= nil and ac.isJoystickButtonPressed(d, store.revBtn)
+  if down and not held.rev then flipRev() end
+  held.rev = down
 end
 
 -- sampling -------------------------------------------------------------------
@@ -259,6 +295,7 @@ local function start(dt)                                -- once the car and the 
   store.map = clampIndex(store.map, #cfg.maps)
   store.sound = clampIndex(store.sound, #cfg.sounds)
   applyMap()
+  applyRev()
   applySound()
 end
 
@@ -271,7 +308,8 @@ function script.update(dt)
     local ok, err = pcall(pollWheel, dt)
     if not ok then fail('wheel button', err) end
     mapTimer = mapTimer + dt
-    if mapTouched and mapTimer > 2 then applyMap() end  -- a session restart puts the car back on its default
+    if mapTouched and mapTimer > 2 then applyMap(); applyRev() end   -- a session restart puts the car back on its defaults
+    if math.abs(now.limiter - soundLimiter) > 100 then applySound() end   -- the rev limit moved: refit the sound to it
   end
   acc = acc + dt
   if acc < 0.2 then return end                         -- 5 Hz: a line the Mac can read to check the numbers
@@ -286,10 +324,10 @@ function script.update(dt)
     local m = cfg.maps[clampIndex(store.map, #cfg.maps)]
     mapName, level = (m.name:gsub(',', '')), m.level
   end
-  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s',
+  io.save(OUT, string.format('%d,%.0f,%.2f,%.3f,%.1f,%.1f,%.2f,%.2f,%d,%s,%.2f,%d,%.3f,%.3f,%s,%d,%s,%.0f,%s,%d',
     seq, now.rpm, now.gas, now.boost, now.tq, now.hp,
     num(car.drivetrainTorque), num(car.drivetrainPower), num(car.turboCount),
-    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' '))), true)
+    mapName, level, mapTouched and 1 or 0, wg0, wg1, (status.sound:gsub(',', '')), status.bank, (status.err:gsub('[,\r\n]', ' ')), now.limiter, (status.note:gsub('[,\r\n]', ' ')), num(store.rev)), true)
 end
 
 -- drawing helpers ------------------------------------------------------------
@@ -460,20 +498,50 @@ local function drawSwitches(o, w)
   end
   switchArea('##rigmap', vec2(mx, o.y), mw, hgt, 'map', flipMap)
 
-  -- engine sound: the pill shows what is playing, a click moves to the next
-  local sx = mx + mw + 22
-  label('SOUND', 11, vec2(sx, o.y), COL.dim, 0)
-  label(store.sndBtn >= 0 and ('btn ' .. (store.sndBtn + 1)) or 'engine', 9, vec2(sx, o.y + 13), COL.faint, 0)
-  local px = sx + 48
-  local pw = math.max(60, o.x + w - px)
-  ui.drawRectFilled(vec2(px, o.y), vec2(px + pw, o.y + hgt), COL.track, hgt / 2)
-  ui.drawRect(vec2(px, o.y), vec2(px + pw, o.y + hgt), COL.tq, hgt / 2, nil, 1)
-  if binding == 'sound' then
-    label('press a button', 11, vec2(px + pw / 2, o.y + 5), COL.text, 0.5)
-  else
-    label(cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name, 12, vec2(px + pw / 2, o.y + 4), COL.text, 0.5)
+  -- rev limit: the lit segment is the limit the car reports, so it only moves if the car really changed
+  if cfg.revs ~= nil then
+    local rx = mx + mw + 18
+    label('REV', 11, vec2(rx, o.y), COL.dim, 0)
+    label(store.revBtn >= 0 and ('btn ' .. (store.revBtn + 1)) or 'limit', 9, vec2(rx, o.y + 13), COL.faint, 0)
+    local bx, rseg = rx + 32, 48
+    local rw = rseg * #cfg.revs
+    ui.drawRectFilled(vec2(bx, o.y), vec2(bx + rw, o.y + hgt), COL.track, hgt / 2)
+    ui.drawRect(vec2(bx, o.y), vec2(bx + rw, o.y + hgt), COL.edge, hgt / 2, nil, 1)
+    if binding == 'rev' then
+      label('press', 11, vec2(bx + rw / 2, o.y + 5), COL.text, 0.5)
+    else
+      local live = 1
+      for i = 2, #cfg.revs do
+        if math.abs(now.limiter - cfg.revs[i].rpm) < math.abs(now.limiter - cfg.revs[live].rpm) then live = i end
+      end
+      for i = 1, #cfg.revs do
+        local sx = bx + rseg * (i - 1)
+        if i == live then
+          local hot = i > 1
+          ui.drawRectFilled(vec2(sx + 2, o.y + 2), vec2(sx + rseg - 2, o.y + hgt - 2), hot and COL.red or COL.boost, (hgt - 4) / 2)
+          plain(cfg.revs[i].name, 12, vec2(sx + rseg / 2, o.y + 4), hot and COL.text or COL.ink, 0.5)
+        else
+          label(cfg.revs[i].name, 12, vec2(sx + rseg / 2, o.y + 4), COL.faint, 0.5)
+        end
+      end
+    end
+    switchArea('##rigrev', vec2(bx, o.y), rw, hgt, 'rev', flipRev)
   end
-  switchArea('##rigsound', vec2(px, o.y), pw, hgt, 'sound', cycleSound)
+
+  -- engine sound, on its own line: the pill shows what is playing, a click moves to the next
+  local sy = o.y + 30
+  label('SOUND', 11, vec2(o.x, sy), COL.dim, 0)
+  label(store.sndBtn >= 0 and ('btn ' .. (store.sndBtn + 1)) or 'engine', 9, vec2(o.x, sy + 13), COL.faint, 0)
+  local px = o.x + 48
+  local pw = math.max(60, o.x + w - px)
+  ui.drawRectFilled(vec2(px, sy), vec2(px + pw, sy + hgt), COL.track, hgt / 2)
+  ui.drawRect(vec2(px, sy), vec2(px + pw, sy + hgt), COL.tq, hgt / 2, nil, 1)
+  if binding == 'sound' then
+    label('press a wheel button', 11, vec2(px + pw / 2, sy + 5), COL.text, 0.5)
+  else
+    label(cfg.sounds[clampIndex(store.sound, #cfg.sounds)].name, 12, vec2(px + pw / 2, sy + 4), COL.text, 0.5)
+  end
+  switchArea('##rigsound', vec2(px, sy), pw, hgt, 'sound', cycleSound)
 end
 
 function windowMain(dt)
@@ -512,7 +580,7 @@ function windowMain(dt)
     label('fills in at full throttle', 11, vec2(ix + iw, ly), COL.faint, 1)
   end
 
-  local row = cfg ~= nil and 34 or 0                              -- room for the switches on cars that have them
+  local row = cfg ~= nil and 64 or 0                              -- room for the two lines of switches on cars that have them
   local cy = ly + 18
   local ch = math.max(70, h - (cy - o.y) - 46 - row)
   drawCurve(vec2(ix, cy), iw, ch)
