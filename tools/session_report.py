@@ -177,7 +177,8 @@ def main():
     md = ["# Lap log", "",
           f"{len(rows)} laps in {len({r[3] for r in rows})} sessions, {min(r[2] for r in rows):%Y-%m-%d} to {max(r[2] for r in rows):%Y-%m-%d}. "
           "Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; "
-          "the first lap of a session starts from the pits, so it is always slow.", ""]
+          "the first lap of a session is always slow: the game starts its clock on the grid slot, some way before the line, "
+          "so that lap is a standing start plus the run-up. The control board times first laps from the line instead.", ""]
     featured = [(k, v) for k, v in groups.items() if k[1] in FEATURED_CARS or k[0].split("-")[0] in FEATURED_TRACKS]
     for title, pick in (("Ferrari F2004", lambda k: k[1] == "ks_ferrari_f2004"),
                         ("Porsche 911 GT2 RS track build", lambda k: k[1] == "porsche_911_gt2_rs_wss_2000"),

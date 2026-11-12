@@ -1,6 +1,6 @@
 # Lap log
 
-276 laps in 71 sessions, 2026-09-12 to 2026-11-12. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session starts from the pits, so it is always slow.
+276 laps in 71 sessions, 2026-09-12 to 2026-11-12. Written by [`tools/session_report.py`](../tools/session_report.py) from Content Manager's saved sessions; the first lap of a session is always slow: the game starts its clock on the grid slot, some way before the line, so that lap is a standing start plus the run-up. The control board times first laps from the line instead.
 
 ## Ferrari F2004
 
