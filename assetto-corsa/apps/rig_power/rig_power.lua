@@ -1086,20 +1086,17 @@ local function revCounter(c, r, s)
   stroke(c, rc - 8 * s, A0, A1, K.off, 6 * s)
   if psi > 0.2 then stroke(c, rc - 8 * s, A0, A0 + (A1 - A0) * math.min(1, psi / boostTop), K.teal, 6 * s) end
   local gearText = now.gear < 0 and 'R' or (now.gear == 0 and 'N' or string.format('%d', now.gear))
-  local gs = rc * 0.78
-  centred(gearText, gs, c, -gs * 0.82, K.white)
-  centred(thousands(math.floor(now.rpm / 10 + 0.5) * 10), 15 * s, c, gs * 0.20, zone)
+  local gs = rc * 0.60                                     -- the gear, with clear space under it before the revs
+  centred(gearText, gs, c, -rc * 0.66, K.white)
+  local ry = rc * 0.14
+  centred(thousands(math.floor(now.rpm / 10 + 0.5) * 10), 15 * s, c, ry, zone)
   if store.clusterLayout >= 2 then
-    local speed, big, tiny = string.format('%.0f', now.mph), 19 * s, 8 * s      -- the figure, with its unit kept very small
-    local wn, wu = ui.measureDWriteText(speed, big).x, ui.measureDWriteText('mph', tiny).x
-    local x, y = c.x - (wn + 3 * s + wu) / 2, c.y + gs * 0.20 + 17 * s
-    ui.dwriteDrawText(speed, big, vec2(x, y), K.white)
-    ui.dwriteDrawText('mph', tiny, vec2(x + wn + 3 * s, y + (big - tiny) * 0.80), K.dimw)
+    centred(string.format('%.0f', now.mph), 20 * s, c, ry + 19 * s, K.white)   -- the speed, with no unit: it is the only speed here
   else
-    centred(string.format('%.1f psi', psi), 12 * s, c, gs * 0.20 + 19 * s, K.teal)
+    centred(string.format('%.1f psi', psi), 12 * s, c, ry + 20 * s, K.teal)
   end
-  ui.setCursor(vec2(c.x - gs * 0.4, c.y - gs * 0.75))
-  if ui.invisibleButton('##cllayout', vec2(gs * 0.8, gs * 0.85)) then store.clusterLayout = clampIndex(store.clusterLayout, 3) % 3 + 1 end
+  ui.setCursor(vec2(c.x - gs * 0.5, c.y - rc * 0.62))
+  if ui.invisibleButton('##cllayout', vec2(gs, gs * 0.9)) then store.clusterLayout = clampIndex(store.clusterLayout, 3) % 3 + 1 end
   -- the needle, over the face only
   local an = A0 + (A1 - A0) * frac
   ui.drawLine(onArc(c, rc + 2 * s, an), onArc(c, r - 2 * s, an), st == 3 and K.white or K.red, 4 * s)
@@ -1142,19 +1139,21 @@ local function gForce(c, r, s, dt)
     table.insert(G.trail, 1, { G.x, G.z })
     G.trail[25] = nil
   end
+  local nowSize = math.max(11, r * 0.26)                    -- the g being pulled now, drawn first so the dot passes over it
+  centred(string.format('%.1f', math.sqrt(G.x * G.x + G.z * G.z)), nowSize, c, r * 0.06, hex('F4F7FA', 0.85))
   for i = #G.trail, 1, -1 do
     ui.drawCircleFilled(spot(G.trail[i][1], G.trail[i][2]), 2 * s, hex('F4F7FA', 0.45 * (1 - i / 26)), 8)
   end
   ui.drawCircleFilled(spot(G.x, G.z), 5 * s, K.red, 16)
-  local size = math.max(9, r * 0.15)
-  centred(string.format('%.1f', G.up), size, vec2(c.x, c.y - r + 8 * s), 0, K.white)
-  centred(string.format('%.1f', G.down), size, vec2(c.x, c.y + r - 9 * s - size * 1.15), 0, K.white)
-  ui.dwriteDrawText(string.format('%.1f', G.left), size, vec2(c.x - r + 9 * s, c.y - size * 0.6), K.white)
+  local size = math.max(9, r * 0.14)                        -- the most seen each way, smaller and dimmer than the live figure
+  centred(string.format('%.1f', G.up), size, vec2(c.x, c.y - r + 8 * s), 0, K.dimw)
+  centred(string.format('%.1f', G.down), size, vec2(c.x, c.y + r - 9 * s - size * 1.15), 0, K.dimw)
+  ui.dwriteDrawText(string.format('%.1f', G.left), size, vec2(c.x - r + 9 * s, c.y - size * 0.6), K.dimw)
   local w = ui.measureDWriteText(string.format('%.1f', G.right), size).x
-  ui.dwriteDrawText(string.format('%.1f', G.right), size, vec2(c.x + r - 9 * s - w, c.y - size * 0.6), K.white)
+  ui.dwriteDrawText(string.format('%.1f', G.right), size, vec2(c.x + r - 9 * s - w, c.y - size * 0.6), K.dimw)
   ui.setCursor(vec2(c.x - reach, c.y - reach))
   if ui.invisibleButton('##clg', vec2(reach * 2, reach * 2)) then resetG() end
-  if ui.itemHovered() then ui.setTooltip('Most g seen braking (top), under power (bottom) and cornering each way. Click to clear.') end
+  if ui.itemHovered() then ui.setTooltip('The large figure is the g being pulled now. Round the edge: the most seen braking (top), under power (bottom) and cornering each way. Click to clear those.') end
 end
 
 -- The cluster's settings (the cog on its title bar): which arrangement of the clocks to show.
