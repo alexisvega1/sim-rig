@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16324a"/>
+      <stop offset="1" stop-color="#0a1320"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff3b2f"/>
+      <stop offset="1" stop-color="#b80d05"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="52" y="52" width="920" height="920" rx="205"/></clipPath>
+    <pattern id="check" width="92" height="92" patternUnits="userSpaceOnUse" x="52" y="880">
+      <rect width="92" height="92" fill="#f4f6f8"/>
+      <rect width="46" height="46" fill="#11161d"/>
+      <rect x="46" y="46" width="46" height="46" fill="#11161d"/>
+    </pattern>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect x="52" y="52" width="920" height="920" fill="url(#sky)"/>
+
+    <!-- track sweeping from the foreground round a bend into the distance -->
+    <path id="line" d="M -60 760 C 330 760 560 640 660 470 C 740 330 900 250 1100 240" fill="none"
+          stroke="#f4f6f8" stroke-width="250" stroke-linecap="butt"/>
+    <path d="M -60 760 C 330 760 560 640 660 470 C 740 330 900 250 1100 240" fill="none"
+          stroke="#e10600" stroke-width="250" stroke-dasharray="46 46"/>
+    <path d="M -60 760 C 330 760 560 640 660 470 C 740 330 900 250 1100 240" fill="none"
+          stroke="#3b4553" stroke-width="206"/>
+    <path d="M -60 760 C 330 760 560 640 660 470 C 740 330 900 250 1100 240" fill="none"
+          stroke="#f4f6f8" stroke-width="9" stroke-dasharray="52 44" opacity=".85"/>
+
+    <!-- chequered strip along the bottom -->
+    <rect x="52" y="880" width="920" height="92" fill="url(#check)"/>
+  </g>
+
+  <!-- red sports car, side view -->
+  <ellipse cx="512" cy="742" rx="390" ry="26" fill="#000" opacity=".38"/>
+  <path fill="url(#body)" stroke="#7d0a04" stroke-width="6" stroke-linejoin="round" d="
+    M 110 720
+    L 104 674
+    Q 102 642 140 634
+    L 300 614
+    Q 404 550 520 546
+    L 600 548
+    Q 684 558 764 620
+    L 890 644
+    Q 930 654 934 690
+    L 934 720
+    L 836 720
+    A 86 86 0 0 0 664 720
+    L 400 720
+    A 86 86 0 0 0 228 720
+    Z"/>
+  <!-- windows -->
+  <path fill="#14202c" d="M 338 614 Q 412 564 520 560 L 548 561 L 548 614 Z"/>
+  <path fill="#14202c" d="M 566 562 L 598 563 Q 666 572 724 616 L 566 616 Z"/>
+  <!-- door line, intake, lights -->
+  <path d="M 557 620 L 557 702" stroke="#7d0a04" stroke-width="6" fill="none"/>
+  <path d="M 420 656 L 500 656 L 484 694 L 404 694 Z" fill="#7d0a04" opacity=".7"/>
+  <path d="M 884 652 Q 916 662 922 686 L 882 678 Z" fill="#ffe27a"/>
+  <rect x="102" y="656" width="22" height="32" rx="6" fill="#ffb3ad"/>
+  <!-- rear wing -->
+  <path d="M 100 598 L 222 584 L 226 602 L 104 616 Z" fill="#b80d05" stroke="#7d0a04" stroke-width="4"/>
+  <path d="M 160 606 L 174 638" stroke="#7d0a04" stroke-width="10"/>
+  <!-- wheels -->
+  <g>
+    <circle cx="314" cy="722" r="74" fill="#10141a"/>
+    <circle cx="314" cy="722" r="42" fill="#c9d1da"/>
+    <circle cx="314" cy="722" r="14" fill="#10141a"/>
+    <circle cx="750" cy="722" r="74" fill="#10141a"/>
+    <circle cx="750" cy="722" r="42" fill="#c9d1da"/>
+    <circle cx="750" cy="722" r="14" fill="#10141a"/>
+  </g>
+</svg>

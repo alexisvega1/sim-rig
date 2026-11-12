@@ -1,0 +1,48 @@
+{
+ "haptics": {
+  "master": 1.0,
+  "effects": {
+   "abs": {
+    "on": true,
+    "gain": 0.9,
+    "freq": 30.0
+   },
+   "lockup": {
+    "on": true,
+    "gain": 0.8
+   },
+   "tc": {
+    "on": true,
+    "gain": 0.7,
+    "freq": 45.0
+   },
+   "slip": {
+    "on": true,
+    "gain": 0.6
+   },
+   "engine": {
+    "on": true,
+    "gain": 0.3
+   },
+   "shift": {
+    "on": true,
+    "gain": 1.0,
+    "freq": 60.0
+   }
+  }
+ },
+ "leds": {
+  "default": {
+   "start": 55.0,
+   "full": 90.0,
+   "flash": 92.0
+  },
+  "cars": {
+   "ks_ferrari_f2004": {
+    "start": 80.0,
+    "full": 97.0,
+    "flash": 98.5
+   }
+  }
+ }
+}
