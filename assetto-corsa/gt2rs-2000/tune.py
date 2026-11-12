@@ -18,6 +18,8 @@ to an installed copy of the car, so the tune can be rebuilt from the original mo
                 the final drive by the same factor. Peak power is held from 9,000 to 12,000 rpm.
     sound       backfire from lower revs
     name        the game's menus call it the 2500hp MONSTER, with figures and curves to match
+    traction    all-wheel drive with 35% of the torque to the front (--rwd keeps it rear-drive), and less boost
+                in the low gears, where the tyres could not use it (--flat-boost for full boost in every gear)
 
 Every file it changes is first copied to <name>.orig-before-tune (once).
 Run it with the game closed:  python3 tune.py   (or  --data <path to the car's data folder>)
@@ -108,7 +110,8 @@ def brakes(t: str) -> str:
 
 
 def downforce(t: str) -> str:
-    for sec, gain in (("WING_1", 4.65), ("WING_2", 4.35), ("WING_3", 4.05)):   # front, rear, diffuser: three times the lift
+    # front, rear, diffuser: three times the lift, then more at the front, where only 28% of the load sat above 200 mph
+    for sec, gain in (("WING_1", 6.3), ("WING_2", 4.35), ("WING_3", 4.05)):
         t = set_key(t, sec, "CL_GAIN", gain)
     return set_key(t, "WING_2", "CD_GAIN", 3.6)                                # the rear wing now costs drag
 
@@ -134,9 +137,36 @@ def power(t: str) -> str:
     return set_key(t, "DAMAGE", "TURBO_BOOST_THRESHOLD", "6.0")
 
 
+AWD = """[AWD]
+FRONT_SHARE=35
+FRONT_DIFF_POWER=0.10
+FRONT_DIFF_COAST=0.05
+FRONT_DIFF_PRELOAD=0
+CENTRE_DIFF_POWER=0.50
+CENTRE_DIFF_COAST=0.30
+CENTRE_DIFF_PRELOAD=30
+REAR_DIFF_POWER=0.50
+REAR_DIFF_COAST=0.40
+REAR_DIFF_PRELOAD=20
+"""
+
+
+def all_wheel_drive(t: str) -> str:
+    """35% of the torque to the front axle through a centre differential that locks under power."""
+    t = set_key(t, "TRACTION", "TYPE", "AWD")
+    nl = "\r\n" if "\r\n" in t else "\n"
+    block = AWD.replace("\n", nl)
+    found = re.search(r"^\[AWD\][^\[]*", t, re.M)
+    if found:
+        if found.group(0).split() == block.split():        # already as wanted
+            return t
+        return t[:found.start()] + block + nl + t[found.end():]
+    return t.rstrip("\r\n") + nl + nl + block
+
+
 def gearbox(t: str) -> str:
     t = set_key(t, "CLUTCH", "MAX_TORQUE", 4000)        # 2,500 hp makes about 2,700 N·m; the old clutch held 2,500
-    return set_key(t, "GEARS", "GEAR_7", 0.55)          # the old 7th ran into the limiter at about 224 mph
+    return set_key(t, "GEARS", "GEAR_7", 0.50)          # 0.65 ran into the limiter at 224 mph, 0.55 at 264
 
 
 STOCK_LIMITER = 7200
@@ -144,23 +174,40 @@ STOCK_LIMITER = 7200
 
 SWITCH = "F"            # the Custom Shaders Patch extra switch that selects the high rev limit
 
-SCRIPT = """-- Rev limit switch, written by tune.py. Extra switch %(switch)s off: %(low)d rpm. On: %(high)d rpm, with the
--- final drive shortened by the same factor, so the speed reached in each gear does not change.
+SCRIPT = """-- Written by tune.py. Two jobs, done on every physics step:
+--   1. Rev limit. Extra switch %(switch)s off: %(low)d rpm. On: %(high)d rpm, with the final drive shortened by the
+--      same factor, so the speed reached in each gear does not change.
+--   2. Boost by gear. Each turbo's wastegate is %(wastegate)s bar times the share for the gear the car is in, so
+--      the low gears get less boost than the tyres would only spin away. The driver's map setting still applies on top.
 if car.isAIControlled then
   return nil
 end
 
 local LOW, HIGH, FINAL = %(low)d, %(high)d, %(final)s
-local mode, timer = -1, 0
+local WASTEGATE = %(wastegate)s
+local SHARE = { %(shares)s }                -- by gear: 1st, 2nd, ... (gears beyond the list get full boost)
+local mode, share, timer = -1, -1, 0
 
 function script.update(dt)
-  local want = car.extra%(switch)s and 1 or 0
   timer = timer + dt
-  if want == mode and timer < 1 then return end      -- set again once a second: a session restart resets the car
-  mode, timer = want, 0
-  local limit = want == 1 and HIGH or LOW
-  ac.setEngineRPMLimit(limit, true)
-  ac.setGearsFinalRatio(FINAL * limit / LOW)
+  local again = timer >= 1                    -- set again once a second: a session restart resets the car
+  if again then timer = 0 end
+  if HIGH > LOW then
+    local want = car.extra%(switch)s and 1 or 0
+    if want ~= mode or again then
+      mode = want
+      local limit = want == 1 and HIGH or LOW
+      ac.setEngineRPMLimit(limit, true)
+      ac.setGearsFinalRatio(FINAL * limit / LOW)
+    end
+  end
+  local gear = ac.accessCarPhysics().gear - 1   -- 0 is reverse and 1 neutral in the physics, so 1st becomes 1
+  local now = SHARE[gear] or 1
+  if now ~= share or again then
+    share = now
+    ac.setTurboWastegate(0, WASTEGATE * now, true)
+    ac.setTurboWastegate(1, WASTEGATE * now, true)
+  end
 end
 """
 
@@ -174,8 +221,8 @@ def revs(k: float, high: int = 0):
         t = set_key(t, "COAST_REF", "TORQUE", round(70 / k, 1))            # same engine braking at the wheels
         for sec in ("TURBO_0", "TURBO_1"):
             t = set_key(t, sec, "REFERENCE_RPM", round(4200 * k))
-        # downshifts have been seen to carry the engine 1,600 rpm past the high limit, so damage starts well above that
-        return set_key(t, "DAMAGE", "RPM_THRESHOLD", max(round(7500 * k), high + 2500))
+        # downshifts have been seen to carry the engine 2,200 rpm past the high limit, so damage starts well above that
+        return set_key(t, "DAMAGE", "RPM_THRESHOLD", max(round(7500 * k), high + 4000))
     return fn
 
 
@@ -214,7 +261,7 @@ def gearing(k: float):
     return fn
 
 
-def describe(data: Path, k: float, high: int, dry: bool) -> bool:
+def describe(data: Path, k: float, high: int, dry: bool, awd: bool = True) -> bool:
     """Give the car a name and figures that match what it now is, in ui/ui_car.json (what the game's menus show).
     The figures are for the high boost map: power.lut x (1 + boost), boost limited by the turbos' own curve."""
     path = data.parent / "ui" / "ui_car.json"
@@ -238,7 +285,8 @@ def describe(data: Path, k: float, high: int, dry: bool) -> bool:
     new = re.sub(r'("name"\s*:\s*")[^"]*(")', lambda m: m.group(1) + "Porsche 911 GT2 RS | 2500hp MONSTER" + m.group(2), old, count=1)
     new = re.sub(r'("description"\s*:\s*")[^"]*(")', lambda m: m.group(1) + "Track build of the 991 GT2 RS: twin turbos at up to 69 psi, "
                  f"{peak_hp:,.0f} hp on the high map and 2,000 on the low one, slicks, three times the downforce, revs to {top:,} rpm. "
-                 "Not online-legal (modified data)." + m.group(2), new, count=1)
+                 + ("All-wheel drive. " if awd else "") + "Not online-legal (modified data)." + m.group(2), new, count=1)
+    new = re.sub(r'"(rwd|awd)"', '"awd"' if awd else '"rwd"', new, count=1)
     for key, value in (("bhp", f"{round(peak_hp, -1):.0f} bhp"), ("torque", f"{peak_nm * 0.73756:,.0f} lb-ft"), ("topspeed", "264 mph"),
                        ("pwratio", f"{1480 / peak_hp:.2f} kg/hp")):
         new = re.sub(r'("%s"\s*:\s*")[^"]*(")' % key, lambda m, v=value: m.group(1) + v + m.group(2), new, count=1)
@@ -265,6 +313,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="say what would change, change nothing")
     ap.add_argument("--redline", type=int, default=9000, help="rev limit in rpm (the mod's own is 7200)")
     ap.add_argument("--high-redline", type=int, default=12000, help="second rev limit on Extra F; 0 for none")
+    ap.add_argument("--rwd", action="store_true", help="leave the car rear-wheel drive")
+    ap.add_argument("--flat-boost", action="store_true", help="full boost in every gear")
     ap.add_argument("--backup-suffix", default=BACKUP, help="suffix for the copies kept of the files as they were")
     a = ap.parse_args()
     if not (a.data / "engine.ini").exists():
@@ -280,17 +330,19 @@ def main():
     car.edit("engine.ini", lambda t: revs(k, high)(power(t)))
     car.park("ctrl_turbo0.ini")                         # these capped each turbo at 0.9 bar whatever engine.ini said
     car.park("ctrl_turbo1.ini")
-    car.edit("drivetrain.ini", lambda t: gearing(k)(gearbox(t)))
+    car.edit("drivetrain.ini", lambda t: gearing(k)(gearbox(t if a.rwd else all_wheel_drive(t))))
     car.edit("sounds.ini", sound)
     # the curve is always rebuilt from the mod's own: the oldest copy kept of it, or the file itself on a first run
     kept = sorted(glob.glob(str(a.data / "power.lut.*")), key=lambda p: Path(p).stat().st_mtime)
     original = Path(kept[0] if kept else a.data / "power.lut").read_bytes().decode("utf-8", "surrogateescape")
     car.edit("power.lut", lambda _: curve(original, k, high) if high or abs(k - 1) > 1e-9 else original)
-    if high:
-        car.write("script.lua", SCRIPT % dict(switch=SWITCH, low=a.redline, high=high, final=round(4.09 * k, 3)))
-    elif (a.data / "script.lua").exists() and "written by tune.py" in (a.data / "script.lua").read_text():
+    shares = "1, 1, 1, 1" if a.flat_boost else "0.55, 0.70, 0.85, 0.95"
+    if high or not a.flat_boost:
+        car.write("script.lua", SCRIPT % dict(switch=SWITCH, low=a.redline, high=high or a.redline, final=round(4.09 * k, 3),
+                                              wastegate="2.973", shares=shares))
+    elif (a.data / "script.lua").exists() and "ritten by tune.py" in (a.data / "script.lua").read_text():
         car.park("script.lua")
-    if describe(a.data, k, high, a.dry_run):
+    if describe(a.data, k, high, a.dry_run, not a.rwd):
         car.changed.append("ui/ui_car.json (name and figures)")
     print(("would change: " if a.dry_run else "changed: ") + (", ".join(car.changed) or "nothing, already tuned"))
 

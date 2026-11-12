@@ -40,6 +40,11 @@ What the recorded laps showed along the way:
 - `tune.py` also renames the car in the game's menus to "2500hp MONSTER" with matching figures. The folder name keeps
   its `_2000`, because setups, saved laps and the sound file are all tied to it.
 
+- Traction package (not yet driven): all-wheel drive with 35% of the torque to the front through a centre differential
+  that locks under power; boost by gear (55%, 70%, 85% and 95% of the wastegate in 1st to 4th, full from 5th), done by
+  the script in the car; 7th lengthened again (0.55 to 0.50); and 35% more front downforce. `--rwd` and `--flat-boost`
+  leave the first two out.
+
 The brake pedal change is in the game's own `cfg/controls.ini`: `[BRAKES] MAX=0.88`, because a stiff brake spring
 kept the pedal from ever reading 100%.
 
