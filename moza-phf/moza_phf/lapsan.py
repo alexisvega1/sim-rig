@@ -56,6 +56,131 @@ def load(lap_id: str) -> dict | None:
     return None
 
 
+def runs(track: str | None = None, car: str | None = None) -> list[dict]:
+    """Runs that are not laps (see laprec): DNFs and out-laps, oldest first, from the file names alone."""
+    out = []
+    for p in sorted(laprec.LAPS.glob("*/*/*_*_*.json"), key=lambda p: p.name):
+        stamp, ms, kind = (p.stem.split("_") + ["", ""])[:3]
+        if len(stamp) != 13 or not ms.isdigit() or kind not in ("dnf", "out"):
+            continue
+        if (track and p.parent.parent.name != track) or (car and p.parent.name != car):
+            continue
+        y, mo, da, h, mi, se = stamp[0:2], stamp[2:4], stamp[4:6], stamp[7:9], stamp[9:11], stamp[11:13]
+        out.append({"id": f"{p.parent.parent.name}/{p.parent.name}/{p.name}", "track": p.parent.parent.name,
+                    "car": p.parent.name, "date": f"20{y}-{mo}-{da}T{h}:{mi}:{se}", "ms": int(ms),
+                    "status": "dnf" if kind == "dnf" else "out-lap"})
+    return out
+
+
+def load_run(run_id: str) -> dict | None:
+    """A partial run: like `load`, but each series holds `len` values starting at step `i0`."""
+    p = (laprec.LAPS / run_id).resolve()
+    if laprec.LAPS.resolve() not in p.parents:
+        return None
+    try:
+        m = p.stat().st_mtime_ns
+        if run_id in _cache and _cache[run_id][0] == m:
+            return _cache[run_id][1]
+        run = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+    if run.get("partial") and run.get("len") and all(len(run.get(k, ())) == run["len"] for k in laprec.SERIES):
+        _cache[run_id] = (m, run)
+        return run
+    return None
+
+
+def is_standing(lap: dict) -> bool:
+    """The lap began from rest or close to it: over its first few steps the car was doing less than
+    45% of its own typical speed. A flying lap crosses the line near its fastest."""
+    n = lap["n"]
+    k = max(5, n // 130)
+    return statistics.fmean(lap["spd"][:k]) < 0.45 * statistics.median(lap["spd"])
+
+
+def flying_passes(track: str, car: str) -> list[dict]:
+    """Everything that crossed the line at speed and so shows what a flying start is worth: flying laps,
+    and unfinished runs that began at the line. Each as {"spd": [...], "t": [...]} from the line."""
+    out = []
+    for m in index():
+        if m["track"] == track and m["car"] == car:
+            lap = load(m["id"])
+            if lap and not is_standing(lap):
+                out.append({"spd": lap["spd"], "t": lap["t"], "ms": lap["ms"]})
+    for m in runs(track, car):
+        run = load_run(m["id"])
+        if run and run.get("from_line") and run["i0"] <= 2 and run["len"] > run["n"] // 20:
+            k = max(5, run["n"] // 130)
+            if statistics.fmean(run["spd"][:k]) >= 0.45 * statistics.median(run["spd"]):
+                out.append({"spd": run["spd"], "t": run["t"], "ms": None})
+    return out
+
+
+def flying_equivalent(lap: dict, passes: list[dict]) -> int | None:
+    """What a standing-start lap would have been with a flying start: its time less what the launch cost.
+    The launch runs from the line to where the lap first holds 97% of a flying pass's speed (looked for in
+    the first fifth of the lap), and costs the difference in time to that point against the quickest pass."""
+    n, best = lap["n"], None
+    for ref in passes:
+        reach = min(len(ref["spd"]), n // 5)
+        hold = max(8, n // 200)
+        z = next((i for i in range(n // 100, reach - hold)
+                  if all(lap["spd"][j] >= 0.97 * ref["spd"][j] for j in range(i, i + hold))), None)
+        if z is None:
+            continue
+        cost = lap["t"][z] - ref["t"][z]
+        if best is None or cost > best:
+            best = cost                                            # against the quickest pass to that point
+    return None if best is None or best <= 0 else int(round(lap["ms"] - best))
+
+
+def annotate(metas: list[dict]) -> list[dict]:
+    """Mark each lap that began from a standing start, with its flying-equivalent time where one can be worked out."""
+    cache: dict[tuple, list] = {}
+    for m in metas:
+        lap = load(m["id"])
+        m["standing"], m["flying_ms"] = False, None
+        # a session's first lap, timed from the line; the game's own figure also counts the run-up from the grid slot
+        m["first_lap"], m["official_ms"] = bool(lap and lap.get("first_lap")), (lap or {}).get("official_ms")
+        if lap and is_standing(lap):
+            key = (m["track"], m["car"])
+            if key not in cache:
+                cache[key] = flying_passes(*key)
+            m["standing"], m["flying_ms"] = True, flying_equivalent(lap, cache[key])
+    return metas
+
+
+def pace(m: dict) -> int:
+    """The time to rank a lap by: a standing-start lap counts as its flying equivalent."""
+    return m.get("flying_ms") or m["ms"]
+
+
+def run_rows(track: str, car: str) -> list[dict]:
+    """The unfinished runs for one car on one track, each measured against the best lap over the same stretch."""
+    laps = [m for m in index() if m["track"] == track and m["car"] == car]
+    best = load(min(laps, key=lambda m: m["ms"])["id"]) if laps else None
+    dist = distance(best) if best else None
+    out = []
+    for m in runs(track, car):
+        run = load_run(m["id"])
+        if not run:
+            continue
+        n, a = run["n"], run["i0"]
+        b = min(n - 1, a + run["len"] - 1)
+        row = {**m, "how": run.get("how", ""), "from_line": bool(run.get("from_line")), "share": round(run["len"] / n, 3),
+               "p_from": round(a / n, 4), "p_to": round(b / n, 4), "top": round(max(run["spd"]), 1), "end_spd": run.get("end_spd"),
+               "from_m": None, "to_m": None, "vs_best_ms": None}
+        if best and best["n"] == n and a + run["len"] <= n:
+            row["from_m"], row["to_m"] = round(dist[a]), round(dist[b])
+            # the same stretch on the best lap; skip the first 2% of the run so a standing start does not swamp it
+            skip = run["len"] // 50 if not run.get("from_line") else 0
+            took = run["t"][-1] - run["t"][skip]
+            row["vs_best_ms"] = int(round(took - (best["t"][b] - best["t"][a + skip])))
+            row["stretch_ms"] = int(round(took))
+        out.append(row)
+    return out
+
+
 # ------------------------------------------------------------------ pieces ---
 def distance(lap: dict) -> list[float]:
     """Metres from the timing line at each step. From position where the game
@@ -166,6 +291,7 @@ def analysis(track: str, car: str, lap_id: str | None = None, ref_id: str | None
     mine = [m for m in index() if m["track"] == track and m["car"] == car]
     if not mine:
         return None
+    annotate(mine)
     best_meta = min(mine, key=lambda m: m["ms"])
     by_id = {m["id"]: m for m in mine}
     lap_meta = by_id.get(lap_id) or mine[-1]
@@ -283,6 +409,7 @@ def overlay(track: str, car: str, limit: int = 12, clean: bool = True) -> dict |
     mine = [m for m in index() if m["track"] == track and m["car"] == car]
     if not mine:
         return None
+    annotate(mine)
     best_meta = min(mine, key=lambda m: m["ms"])
     ref = load(best_meta["id"])
     if not ref:
@@ -291,7 +418,8 @@ def overlay(track: str, car: str, limit: int = 12, clean: bool = True) -> dict |
     metas = {m["id"]: m for m in mine[-max(2, limit):]}
     metas[best_meta["id"]] = best_meta
     pool = [(m, l) for m in sorted(metas.values(), key=lambda m: m["id"]) if (l := load(m["id"])) and l["n"] == n]
-    kept = [(m, l) for m, l in pool if m["ms"] <= best_meta["ms"] * 1.07] if clean else pool
+    # a standing-start lap is judged on its flying-equivalent time, so the launch alone does not rule it out
+    kept = [(m, l) for m, l in pool if pace(m) <= pace(best_meta) * 1.07] if clean else pool
     if len(kept) < 2:
         kept = pool
     dist = distance(ref)
@@ -325,4 +453,4 @@ def overlay(track: str, car: str, limit: int = 12, clean: bool = True) -> dict |
             "min_spd": [round(min(v), 1) for v in spd], "max_spd": [round(max(v), 1) for v in spd],
             "brake": [round(statistics.fmean(v), 2) for v in brk],
             "mean_ms": round(statistics.fmean(times)), "sd_ms": round(statistics.pstdev(times)), "worst_ms": max(times),
-            "corners": rows, "laps": laps}
+            "corners": rows, "laps": laps, "runs": run_rows(track, car)}

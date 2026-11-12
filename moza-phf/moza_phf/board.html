@@ -646,7 +646,7 @@ function renderTrack(){
   const tracks = [...new Map(rec.laps.map(l => [l.track, l.trackName])).entries()];
   const cars = [...new Map(rec.laps.filter(l => l.track === trk.track).map(l => [l.car, l.carName])).entries()];
   const newest = [...a.laps].reverse();
-  const label = l => `${fmtDateLong(l.date)} · ${fmtLap(l.ms)}${l.id === a.best.id ? " · best" : ""}${l.tyre ? ` · ${l.tyre}` : ""}${l.cuts ? " · cut" : ""}`;
+  const label = l => `${fmtDateLong(l.date)} · ${fmtLap(l.ms)}${l.id === a.best.id ? " · best" : ""}${lapNote(l)}${l.tyre ? ` · ${l.tyre}` : ""}${l.cuts ? " · cut" : ""}`;
   const pickSel = (cur, on) => h("select", {onchange: e => on(e.target.value)},
     newest.map(l => h("option", {value:l.id, selected: l.id === cur}, label(l))));
   const setMode = v => { trk.mode = v; try { localStorage.setItem("rig_mapmode", v); } catch (e) {} renderTrack(); };
@@ -873,6 +873,8 @@ function sliceChart(holder, a){
 let ov = null;
 const ovs = {track:null, car:null, laps:12, all:false, mode:"speed"};
 try { ovs.mode = localStorage.getItem("rig_ovmode") || "speed"; } catch (e) {}
+// What sets a lap apart from an ordinary flying one, for labels.
+const lapNote = l => (l.first_lap ? " · first lap, timed from the line" : "") + (l.standing ? ` · standing start${l.flying_ms ? `, ${fmtLap(l.flying_ms)} with a flying one` : ""}` : "");
 const brakeStops = () => isDark() ? ["#5a2410", "#933612", "#d95926", "#ee8a62", "#f7bfa7"] : ["#f6c4ae", "#f09a76", "#eb6834", "#c44e1f", "#933612"];
 
 async function drawOverlay(){
@@ -984,10 +986,25 @@ function renderOverlay(){
       h("div", {class:"scroll", style:"max-height:none; overflow-x:auto"}, h("table", {class:"heat"},
         h("thead", {}, h("tr", {}, h("th", {}, "Lap"), a.corners.map(c => h("th", {}, `T${c.n}`)))),
         h("tbody", {}, rows.map(l => h("tr", {}, h("td", {}, fmtLap(l.ms), h("span", {class:"tag"}, (l.id === a.best.id ? "best · " : "") + new Date(l.date).toLocaleString(undefined, {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})
-              + (l.tyre ? ` · ${l.tyre}` : ""))),
+              + (l.tyre ? ` · ${l.tyre}` : "") + lapNote(l))),
             l.lost_ms.map(ms => h("td", {class:"c", style:shade(ms), title: ms ? `${fmtSec(ms)} s slower than the quickest pass` : "The quickest pass of these laps"}, ms ? `+${(ms / 1000).toFixed(2)}` : "best")))),
           h("tr", {class:"foot"}, h("td", {}, "Average"), a.corners.map(c => h("td", {}, `+${(c.mean_lost_ms / 1000).toFixed(2)}`))),
           h("tr", {class:"foot"}, h("td", {}, "Varies by"), a.corners.map(c => h("td", {}, `±${(c.sd_ms / 1000).toFixed(2)}`))))))));
+  }
+  if (a.runs && a.runs.length){                                // runs that are not laps: kept, but apart from the laps
+    const km = m => m == null ? "" : (m / 1000).toFixed(1);
+    const kind = r => r.status === "out-lap" ? "Out-lap" : "DNF";
+    const ended = r => r.status === "out-lap" ? "reached the line" : r.how;
+    root.append(h("div", {class:"card"}, h("h2", {}, "Runs that were not laps"),
+      h("p", {class:"sub"}, "DNFs (a crash, a reset to the pits, or the session ending) and out-laps from the pits. They are left out of everything above, but each is measured against your best lap over the same stretch of track."),
+      h("div", {class:"scroll"}, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Kind"), h("th", {}, "How it ended"), h("th", {}, "Started"),
+          h("th", {class:"r"}, "Stretch covered"), h("th", {class:"r"}, "Time on it"), h("th", {class:"r"}, "Against best lap"), h("th", {class:"r"}, "Top speed"))),
+        h("tbody", {}, [...a.runs].reverse().map(r => h("tr", {}, h("td", {}, fmtDateLong(r.date)), h("td", {}, kind(r)), h("td", {}, ended(r)),
+          h("td", {}, r.from_line ? "at the line" : "from the pits"),
+          h("td", {class:"r"}, r.from_m == null ? pct(r.share) + " of the lap" : `${km(r.from_m)} to ${km(r.to_m)} km`),
+          h("td", {class:"r"}, r.stretch_ms == null ? fmtLap(r.ms) : fmtLap(r.stretch_ms)),
+          h("td", {class:"r"}, r.vs_best_ms == null ? "" : `${signed(r.vs_best_ms, 1)} s`),
+          h("td", {class:"r"}, `${spdU(r.top).toFixed(0)} ${unit()}`))))))));
   }
 }
 

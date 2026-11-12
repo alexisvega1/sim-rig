@@ -136,8 +136,19 @@ def track_report(query: dict) -> dict | None:
         a["carName"], a["trackName"] = ui_name("car", a["lap"]["car"]), ui_name("track", a["lap"]["track"])
         known = _session_facts(a["lap"]["car"], a["lap"]["track"])   # Content Manager knows which laps had cuts, and the tyres
         for m in a["laps"]:
-            m["cuts"], m["tyre"] = known.get(m["ms"], (None, None))
+            m["cuts"], m["tyre"] = _fact(known, m)
     return a
+
+
+def _fact(known: dict, m: dict) -> tuple:
+    """Cuts and tyres for a recorded lap. The game files a session's first lap under its own longer time, and a
+    lap rebuilt from a replay can be a few hundredths out, so the nearest saved lap within 50 ms counts."""
+    for ms in (m["ms"], m.get("official_ms")):
+        if ms:
+            near = min(known, key=lambda k: abs(k - ms), default=None)
+            if near is not None and abs(near - ms) <= 50:
+                return known[near]
+    return (None, None)
 
 
 def _session_facts(car: str, track: str) -> dict:
@@ -156,7 +167,7 @@ def overlay_report(query: dict) -> dict | None:
         a["carName"], a["trackName"] = ui_name("car", a["car"]), ui_name("track", a["track"])
         known = _session_facts(a["car"], a["track"])
         for m in a["laps"]:
-            m["cuts"], m["tyre"] = known.get(m["ms"], (None, None))
+            m["cuts"], m["tyre"] = _fact(known, m)
     return a
 
 
