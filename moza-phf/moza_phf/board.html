@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOZA Rig</title>
+<style>
+  :root{
+    color-scheme: light dark;
+    --plane:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --deemph:#b0aea5; --wash:rgba(42,120,214,.10);
+    --good:#0ca30c; --critical:#d03b3b; --led-off:#e1e0d9; --track:#ecebe6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+      --s1:#3987e5; --s2:#d95926; --deemph:#6b6a66; --wash:rgba(57,135,229,.14);
+      --led-off:#2c2c2a; --track:#262624;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--plane); color:var(--ink);
+    font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; padding:18px 24px 6px;
+    max-width:1100px; margin:0 auto}
+  h1{font-size:20px; margin:0; font-weight:650; letter-spacing:-.01em}
+  #chips{display:flex; flex-wrap:wrap; gap:8px; margin-left:auto}
+  .chip{display:flex; align-items:center; gap:7px; padding:4px 10px; border-radius:999px;
+    border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--ink2)}
+  .chip b{color:var(--ink); font-weight:600}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none}
+  .dot.on{background:var(--good)}
+  nav{display:flex; gap:4px; padding:10px 24px 0; max-width:1100px; margin:0 auto;
+    border-bottom:1px solid var(--border)}
+  nav button{appearance:none; border:0; background:none; color:var(--ink2); font:inherit; font-weight:600;
+    padding:9px 14px; border-bottom:2px solid transparent; margin-bottom:-1px; cursor:pointer; border-radius:6px 6px 0 0}
+  nav button:hover{background:var(--wash)}
+  nav button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--s1)}
+  main{max-width:1100px; margin:0 auto; padding:20px 24px 60px}
+  section[hidden]{display:none}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:16px}
+  .card h2{font-size:15px; margin:0 0 2px; font-weight:650}
+  .card .sub{color:var(--ink2); font-size:13px; margin:0 0 14px}
+  .row-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap}
+  button.btn{appearance:none; font:inherit; font-size:13px; font-weight:600; color:var(--ink);
+    background:var(--surface); border:1px solid var(--axis); border-radius:8px; padding:6px 12px; cursor:pointer}
+  button.btn:hover{background:var(--wash)}
+  button.btn:disabled{opacity:.45; cursor:default; background:var(--surface)}
+  button.btn.quiet{border-color:transparent; color:var(--ink2)}
+  input[type=range]{accent-color:var(--s1); width:100%; margin:0}
+  input[type=number]{font:inherit; width:74px; padding:5px 6px; border:1px solid var(--axis); border-radius:6px;
+    background:var(--surface); color:var(--ink); font-variant-numeric:tabular-nums}
+  select{font:inherit; padding:6px 8px; border:1px solid var(--axis); border-radius:8px; background:var(--surface); color:var(--ink); max-width:100%}
+  label.small, .small{font-size:12px; color:var(--muted)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* haptics */
+  .fx{display:grid; grid-template-columns:44px minmax(150px,1.3fr) minmax(130px,1fr) minmax(130px,1fr) 70px 64px;
+    gap:6px 16px; align-items:center; padding:12px 0; border-top:1px solid var(--grid)}
+  .fx:first-of-type{border-top:0}
+  .fx .name{font-weight:600}
+  .fx .desc{font-size:12.5px; color:var(--ink2)}
+  .fx .ctl{display:flex; flex-direction:column; gap:2px}
+  .fx .ctl .lab{display:flex; justify-content:space-between; font-size:12px; color:var(--muted)}
+  .fx .ctl .lab b{color:var(--ink); font-weight:600}
+  .fx.off .ctl, .fx.off .name, .fx.off .desc{opacity:.5}
+  .meter{height:8px; background:var(--track); border-radius:4px; overflow:hidden}
+  .meter i{display:block; height:100%; width:0; background:var(--s1); border-radius:0 4px 4px 0; transition:width .12s linear}
+  .switch{position:relative; width:38px; height:22px; flex:none}
+  .switch input{position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; width:100%; height:100%}
+  .switch span{position:absolute; inset:0; border-radius:999px; background:var(--axis); transition:background .15s}
+  .switch span::after{content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%;
+    background:var(--surface); transition:transform .15s}
+  .switch input:checked + span{background:var(--s1)}
+  .switch input:checked + span::after{transform:translateX(16px)}
+  .switch input:focus-visible + span{outline:2px solid var(--s1); outline-offset:2px}
+  .master{display:grid; grid-template-columns:minmax(200px,1fr) 70px; gap:14px; align-items:center; max-width:520px}
+  @media (max-width:820px){
+    .fx{grid-template-columns:44px 1fr 64px}
+    .fx .ctl, .fx .meterwrap{grid-column:2 / span 2}
+  }
+
+  /* rev lights */
+  .leds{display:flex; gap:4px; margin:10px 0 8px}
+  .leds i{flex:1 1 0; max-width:34px; height:16px; border-radius:4px; background:var(--led-off)}
+  .leds i.g.on{background:#0ca30c} .leds i.r.on{background:#d03b3b} .leds i.b.on{background:#2a78d6}
+  .win{display:grid; grid-template-columns:110px minmax(140px,1fr) 64px; gap:8px 14px; align-items:center; max-width:560px}
+  .band{position:relative; height:14px; background:var(--track); border-radius:4px; margin:14px 0 22px; max-width:560px}
+  .band .fill{position:absolute; top:0; bottom:0; background:var(--s1); border-radius:2px}
+  .band .flash{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--ink)}
+  .band .tick{position:absolute; top:18px; font-size:11px; color:var(--muted); transform:translateX(-50%); white-space:nowrap}
+  table{border-collapse:collapse; width:100%; font-size:13.5px}
+  th{font-weight:600; color:var(--ink2); text-align:left; font-size:12px; padding:6px 10px 6px 0; border-bottom:1px solid var(--axis)}
+  td{padding:7px 10px 7px 0; border-bottom:1px solid var(--grid); vertical-align:middle}
+  td.r, th.r{text-align:right; font-variant-numeric:tabular-nums}
+  td .id{display:block; font-size:11.5px; color:var(--muted)}
+
+  /* laps */
+  .filters{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:end; margin-bottom:16px}
+  .filters label{display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--muted)}
+  .filters .check{flex-direction:row; align-items:center; gap:6px; color:var(--ink2); font-size:13px; padding-bottom:6px}
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:16px}
+  .tile{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px}
+  .tile .k{font-size:12px; color:var(--ink2)}
+  .tile .v{font-size:26px; font-weight:650; letter-spacing:-.02em; margin:2px 0}
+  .tile .n{font-size:12.5px; color:var(--ink2)}
+  .legend{display:flex; gap:16px; font-size:12.5px; color:var(--ink2); margin:0 0 6px}
+  .legend span{display:flex; align-items:center; gap:6px}
+  .legend .kdot{width:9px; height:9px; border-radius:50%; background:var(--s1)}
+  .legend .kline{width:16px; height:2px; background:var(--s2); border-radius:1px}
+  svg text{font:12px system-ui,-apple-system,"Segoe UI",sans-serif; fill:var(--muted)}
+  svg .lbl{fill:var(--ink2)}
+  .bars{display:grid; gap:5px}
+  .bar{display:grid; grid-template-columns:minmax(120px,230px) 1fr 86px; gap:10px; align-items:center; font-size:13px;
+    padding:2px 4px; border-radius:6px; outline:0}
+  .bar:hover, .bar:focus-visible{background:var(--wash)}
+  .bar .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink2)}
+  .bar.sel .nm{color:var(--ink); font-weight:600}
+  .bar .trk{height:14px}
+  .bar .trk i{display:block; height:100%; background:var(--deemph); border-radius:0 4px 4px 0; min-width:2px}
+  .bar.sel .trk i, .bar.one .trk i{background:var(--s1)}
+  .bar .val{text-align:right; font-variant-numeric:tabular-nums; color:var(--ink)}
+  .scroll{max-height:340px; overflow:auto}
+  .empty{color:var(--ink2); padding:8px 0}
+  #tip{position:fixed; z-index:10; pointer-events:none; background:var(--surface); color:var(--ink2); border:1px solid var(--axis);
+    border-radius:8px; padding:8px 10px; font-size:12.5px; box-shadow:0 4px 14px rgba(0,0,0,.18); max-width:280px; display:none}
+  #tip strong{display:block; color:var(--ink); font-size:15px; font-variant-numeric:tabular-nums}
+  #saved{font-size:12.5px; color:var(--muted); min-width:60px}
+
+  /* track map */
+  .two{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr); gap:16px; align-items:start}
+  .two > .card{margin-bottom:16px}
+  @media (max-width:900px){ .two{grid-template-columns:1fr} }
+  .tips{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+  .tips li{border-top:1px solid var(--grid); padding-top:12px}
+  .tips li:first-child{border-top:0; padding-top:0}
+  .tips .t{display:flex; justify-content:space-between; gap:10px; font-weight:600}
+  .tips .t span{font-weight:500; color:var(--ink2); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .tips p{margin:4px 0 0; color:var(--ink2); font-size:13.5px}
+  .scale{display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink2); margin-top:10px; flex-wrap:wrap}
+  .scale .grad{flex:0 1 220px; height:8px; border-radius:4px; min-width:120px}
+  .scale .sw{display:inline-flex; align-items:center; gap:6px; margin-right:10px}
+  .scale .sw i{width:14px; height:6px; border-radius:3px}
+  .legend .kline.one{background:var(--s1)}
+  .chart-title{font-size:12.5px; color:var(--ink2); margin:10px 0 0}
+  td .mini{display:inline-block; height:8px; background:var(--s1); border-radius:0 4px 4px 0; vertical-align:middle; margin-right:8px; min-width:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>MOZA Rig</h1>
+  <span id="saved" aria-live="polite"></span>
+  <div id="chips"></div>
+</header>
+<nav role="tablist">
+  <button role="tab" data-tab="haptics" aria-selected="true">Pedal haptics</button>
+  <button role="tab" data-tab="lights" aria-selected="false">Rev lights</button>
+  <button role="tab" data-tab="laps" aria-selected="false">Lap times</button>
+  <button role="tab" data-tab="track" aria-selected="false">Track map</button>
+</nav>
+<main>
+  <section id="tab-haptics"></section>
+  <section id="tab-lights" hidden></section>
+  <section id="tab-laps" hidden></section>
+  <section id="tab-track" hidden></section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+// element builders: kids are nodes or strings (strings always go in as text)
+function h(tag, attrs = {}, ...kids){
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)){
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, "");
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k);
+  return e;
+}
+function sv(tag, attrs = {}, ...kids){
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k);
+  return e;
+}
+const api = (path, body) => fetch(path, body === undefined ? {} :
+  {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)}).then(r => r.json());
+
+let cfg = null, st = {dash:null, haptics:null, effects:{}, defaults:null}, lapData = null;
+const carNames = {};
+const carName = id => carNames[id] || id;
+
+// ---------------------------------------------------------------- saving ---
+let saveTimer = null;
+function save(reconcile){
+  clearTimeout(saveTimer);
+  $("#saved").textContent = "Saving…";
+  saveTimer = setTimeout(async () => {
+    try {
+      const out = await api("/api/config", cfg);
+      $("#saved").textContent = "Saved";
+      if (reconcile){ cfg = out; reconcile(); }
+    } catch (e){ $("#saved").textContent = "Not saved — is the board still running?"; }
+  }, reconcile ? 0 : 120);
+}
+
+// ------------------------------------------------------------------ tabs ---
+const TABS = ["haptics", "lights", "laps", "track"];
+function showTab(name){
+  for (const b of document.querySelectorAll("nav button")) b.setAttribute("aria-selected", b.dataset.tab === name);
+  for (const t of TABS) $("#tab-" + t).hidden = t !== name;
+  if (name === "laps") drawLaps();
+  if (name === "track") drawTrack();
+  try { localStorage.setItem("rig_tab", name); } catch (e) {}
+}
+for (const b of document.querySelectorAll("nav button")) b.addEventListener("click", () => showTab(b.dataset.tab));
+
+// --------------------------------------------------------------- tooltip ---
+const tip = $("#tip");
+function showTip(x, y, strong, lines){
+  tip.replaceChildren(h("strong", {}, strong), ...lines.map(l => h("div", {}, l)));
+  tip.style.display = "block";
+  const w = tip.offsetWidth, hh = tip.offsetHeight;
+  tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 14)) + "px";
+  tip.style.top = Math.max(8, (y + hh + 20 > innerHeight ? y - hh - 12 : y + 14)) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+
+// ---------------------------------------------------------------- haptics ---
+const FX = {
+  abs:    {name:"ABS", desc:"Pulses when the anti-lock brakes cut in."},
+  lockup: {name:"Wheel lock-up", desc:"Builds as a braking wheel stops turning; pitch rises with how locked it is."},
+  tc:     {name:"Traction control", desc:"Pulses when traction control cuts power."},
+  slip:   {name:"Wheelspin", desc:"Builds as the driven wheels spin under power; pitch rises with the slip."},
+  engine: {name:"Engine vibration", desc:"A light buzz that rises with revs."},
+  shift:  {name:"Gear shift", desc:"A short kick on every gear change."},
+};
+const PEDALS = [["brake", "Brake pedal"], ["throttle", "Throttle pedal"]];
+const meters = {};
+
+function slider(value, min, max, step, onInput){
+  return h("input", {type:"range", min, max, step, value, oninput: e => onInput(+e.target.value)});
+}
+function buildHaptics(){
+  const root = $("#tab-haptics"); root.replaceChildren();
+  const hp = cfg.haptics;
+  const mv = h("b", {class:"num"}, Math.round(hp.master * 100) + "%");
+  root.append(h("div", {class:"card"},
+    h("div", {class:"row-head"},
+      h("div", {}, h("h2", {}, "Overall strength"),
+        h("p", {class:"sub"}, "Scales every effect on both pedals. Changes apply as you move a slider.")),
+      h("button", {class:"btn quiet", onclick: () => {
+        cfg.haptics = JSON.parse(JSON.stringify(st.defaults.haptics)); save(); buildHaptics(); }}, "Reset to defaults")),
+    h("div", {class:"master"},
+      slider(Math.round(hp.master * 100), 0, 200, 5, v => { hp.master = v / 100; mv.textContent = v + "%"; save(); }),
+      mv)));
+  for (const [pedal, title] of PEDALS){
+    const fitted = st.haptics ? st.haptics.pedals.includes(pedal) : true;
+    const card = h("div", {class:"card"}, h("h2", {}, title),
+      h("p", {class:"sub"}, fitted ? "Effects played on this pedal's motor." : "No motor is set up on this pedal, so these stay silent."));
+    for (const [key, info] of Object.entries(FX)){
+      if ((st.effects[key] || {}).pedal !== pedal) continue;
+      const e = hp.effects[key];
+      const row = h("div", {class:"fx" + (e.on ? "" : " off")});
+      const sv_ = h("b", {class:"num"}, Math.round(e.gain * 100) + "%");
+      const m = h("i"); meters[key] = m;
+      row.append(
+        h("label", {class:"switch", title: "Turn " + info.name + " on or off"},
+          h("input", {type:"checkbox", checked: e.on, "aria-label": info.name,
+            onchange: ev => { e.on = ev.target.checked; row.classList.toggle("off", !e.on); save(); }}), h("span")),
+        h("div", {}, h("div", {class:"name"}, info.name), h("div", {class:"desc"}, info.desc)),
+        h("div", {class:"ctl"}, h("div", {class:"lab"}, "Strength", sv_),
+          slider(Math.round(e.gain * 100), 0, 100, 1, v => { e.gain = v / 100; sv_.textContent = v + "%"; save(); })));
+      if ("freq" in e){
+        const fv = h("b", {class:"num"}, Math.round(e.freq) + " Hz");
+        row.append(h("div", {class:"ctl"}, h("div", {class:"lab"}, "Frequency", fv),
+          slider(Math.round(e.freq), 10, 100, 1, v => { e.freq = v; fv.textContent = v + " Hz"; save(); })));
+      } else {
+        row.append(h("div", {class:"ctl"}, h("div", {class:"lab"}, "Frequency", h("b", {}, "Follows the car"))));
+      }
+      row.append(
+        h("div", {class:"meterwrap", title:"Lights up while this effect is playing"}, h("div", {class:"meter"}, m)),
+        h("button", {class:"btn", title:"Buzz this effect for one second",
+          onclick: () => api("/api/test", {effect:key, seconds:1})}, "Test"));
+      card.append(row);
+    }
+    root.append(card);
+  }
+}
+function liveHaptics(){
+  const act = (st.haptics && st.haptics.active) || {};
+  for (const [k, m] of Object.entries(meters)) m.style.width = Math.round(100 * (act[k] || 0)) + "%";
+}
+
+// -------------------------------------------------------------- rev lights ---
+const NLED = 18;
+let ledEls = [], nowEls = {};
+function windowFor(car){ return cfg.leds.cars[car] || cfg.leds.default; }
+function rpmAt(pct, limiter){ return Math.round(limiter * pct / 100).toLocaleString(); }
+function bandEl(w){
+  const band = h("div", {class:"band"});
+  const paint = () => {
+    band.replaceChildren(
+      h("div", {class:"fill", style:`left:${w.start}%; width:${Math.max(0, w.full - w.start)}%`}),
+      w.flash <= 100 ? h("div", {class:"flash", style:`left:calc(${w.flash}% - 1px)`}) : null,
+      h("div", {class:"tick", style:"left:0"}, "0%"),
+      h("div", {class:"tick", style:`left:${w.start}%`}, Math.round(w.start) + "%"),
+      h("div", {class:"tick", style:`left:${Math.min(100, w.full)}%`}, (w.flash <= 100 && w.flash - w.full < 6) ? "" : Math.round(w.full) + "%"),
+      w.flash <= 100 ? h("div", {class:"tick", style:`left:${w.flash}%`}, "flash " + (+w.flash.toFixed(1)) + "%") : null);
+  };
+  paint(); band.repaint = paint; return band;
+}
+function windowControls(w, onChange){
+  const band = bandEl(w), grid = h("div", {class:"win"});
+  const rows = [["start", "Lights start", 20, 98, 1], ["full", "Bar is full", 30, 100, 1], ["flash", "Bar flashes", 30, 101, 0.5]];
+  const labs = {}, inputs = {};
+  const label = k => k === "flash" && w.flash > 100 ? "never" : (+w[k].toFixed(1)) + "%";
+  const sync = () => { for (const [k] of rows){ labs[k].textContent = label(k); if (document.activeElement !== inputs[k]) inputs[k].value = w[k]; } band.repaint(); };
+  for (const [k, text, min, max, step] of rows){
+    labs[k] = h("b", {class:"num"}, label(k));
+    inputs[k] = h("input", {type:"range", min, max, step, value:w[k], "aria-label":text,
+      oninput: e => { w[k] = +e.target.value;
+        if (w.full <= w.start) (k === "start" ? (w.full = Math.min(100, w.start + 1)) : (w.start = Math.max(0, w.full - 1)));
+        if (w.flash < w.full) (k === "flash" ? (w.full = w.flash, w.start = Math.min(w.start, w.full - 1)) : (w.flash = w.full));
+        sync(); onChange(); }});
+    grid.append(h("div", {class:"small"}, text), inputs[k], labs[k]);
+  }
+  return [grid, band];
+}
+function buildLights(){
+  const root = $("#tab-lights"); root.replaceChildren();
+  ledEls = Array.from({length:NLED}, (_, i) => h("i", {class: i < 8 ? "g" : i < 14 ? "r" : "b"}));
+  nowEls = {car:h("h2", {}, "—"), sub:h("p", {class:"sub"}, ""), marks:h("div", {class:"small"}, ""),
+            add:h("button", {class:"btn", onclick: addCurrentCar}, "Give this car its own window")};
+  root.append(h("div", {class:"card"},
+    h("div", {class:"row-head"}, h("div", {}, nowEls.car, nowEls.sub), nowEls.add),
+    h("div", {class:"leds", role:"img", "aria-label":"Rev light preview"}, ledEls), nowEls.marks));
+
+  const [g, b] = windowControls(cfg.leds.default, () => { save(); liveLights(); });
+  root.append(h("div", {class:"card"}, h("h2", {}, "Default window"),
+    h("p", {class:"sub"}, "Used by every car that doesn't have its own below. Each mark is a percentage of that car's rev limiter."), g, b));
+
+  const cars = Object.keys(cfg.leds.cars).sort((a, c) => carName(a).localeCompare(carName(c)));
+  const card = h("div", {class:"card"}, h("h2", {}, "Cars with their own window"),
+    h("p", {class:"sub"}, cars.length ? "These override the default for that car only." :
+      "None yet. Drive a car, then use the button above to give it its own window."));
+  for (const id of cars){
+    const [cg, cb] = windowControls(cfg.leds.cars[id], () => { save(); liveLights(); });
+    card.append(h("div", {style:"border-top:1px solid var(--grid); padding:14px 0 4px"},
+      h("div", {class:"row-head", style:"margin-bottom:10px"},
+        h("div", {}, h("div", {style:"font-weight:600"}, carName(id)), h("div", {class:"small"}, id)),
+        h("button", {class:"btn quiet", onclick: () => { delete cfg.leds.cars[id]; save(); buildLights(); liveLights(); }}, "Remove")),
+      cg, cb));
+  }
+  root.append(card);
+  liveLights();
+}
+function addCurrentCar(){
+  const car = st.dash && st.dash.car;
+  if (!car || cfg.leds.cars[car]) return;
+  cfg.leds.cars[car] = {...cfg.leds.default};
+  save(); buildLights();
+}
+function liveLights(){
+  if (!nowEls.car) return;
+  const d = st.dash, car = d && d.connected && d.car ? d.car : null;
+  let lit = 0, flashing = false;
+  if (car){
+    const w = windowFor(car), own = !!cfg.leds.cars[car], lim = d.maxrpm || 0, pct = lim ? 100 * d.rpm / lim : 0;
+    nowEls.car.textContent = carName(car);
+    nowEls.sub.textContent = `Rev limiter ${Math.round(lim).toLocaleString()} rpm · using ${own ? "its own window" : "the default window"}`;
+    nowEls.marks.textContent = `Lights start at ${rpmAt(w.start, lim)} rpm, the bar is full at ${rpmAt(w.full, lim)}` +
+      (w.flash <= 100 ? `, and it flashes from ${rpmAt(w.flash, lim)}.` : ", and it never flashes.");
+    const frac = (pct - w.start) / Math.max(1, w.full - w.start);
+    lit = frac <= 0 ? 0 : Math.min(NLED, Math.floor(frac * NLED + 0.5));
+    flashing = pct >= w.flash;
+    nowEls.add.hidden = own;
+  } else {
+    nowEls.car.textContent = d ? "No car on track" : "Wheel dashboard bridge is not running";
+    nowEls.sub.textContent = d ? "The preview follows the car once a session is running." : "Start MOZA Rig from the Desktop to drive the rev lights.";
+    nowEls.marks.textContent = ""; nowEls.add.hidden = true;
+  }
+  const blinkOn = flashing && (Date.now() % 400 < 200);
+  ledEls.forEach((e, i) => e.classList.toggle("on", flashing ? blinkOn : i < lit));
+}
+
+// -------------------------------------------------------------------- laps ---
+const fmtLap = ms => { const m = Math.floor(ms / 60000), s = (ms % 60000) / 1000; return `${m}:${s.toFixed(3).padStart(6, "0")}`; };
+const fmtSec = ms => (ms / 1000).toFixed(3);
+const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, {month:"short", day:"numeric"});
+const fmtDateLong = iso => new Date(iso).toLocaleString(undefined, {month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit"});
+const median = a => { const s = [...a].sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; };
+let sel = {track:null, car:null, all:false};
+
+function buildLaps(){
+  const root = $("#tab-laps"); root.replaceChildren();
+  const S = lapData.sessions;
+  if (!S.length){ root.append(h("div", {class:"card empty"}, "No saved laps yet. Content Manager saves a session's laps when you leave it.")); return; }
+  for (const s of S) carNames[s.car] = s.carName;
+  const last = S[S.length - 1];
+  if (!sel.track){ sel.track = last.track; sel.car = last.car; }
+  const tracks = [...new Map(S.map(s => [s.track, s.trackName])).entries()]
+    .map(([id, name]) => ({id, name, n: S.filter(s => s.track === id).reduce((a, s) => a + s.laps.length, 0)}))
+    .sort((a, b) => b.n - a.n);
+  const carsHere = () => { const m = new Map(); for (const s of S) if (s.track === sel.track) m.set(s.car, s); return [...m.values()].reverse(); };
+  const tSel = h("select", {onchange: e => { sel.track = e.target.value; sel.car = carsHere()[0].car; buildLaps(); }},
+    tracks.map(t => h("option", {value:t.id, selected: t.id === sel.track}, `${t.name} (${t.n} laps)`)));
+  if (!carsHere().some(s => s.car === sel.car)) sel.car = carsHere()[0].car;
+  const cSel = h("select", {onchange: e => { sel.car = e.target.value; buildLaps(); }},
+    carsHere().map(s => h("option", {value:s.car, selected: s.car === sel.car}, s.carName)));
+  const total = S.reduce((a, s) => a + s.laps.length, 0);
+  root.append(h("div", {class:"filters"},
+    h("label", {}, "Track", tSel), h("label", {}, "Car", cSel),
+    h("label", {class:"check"}, h("input", {type:"checkbox", checked: sel.all, onchange: e => { sel.all = e.target.checked; buildLaps(); }}), "Include slow laps"),
+    h("div", {class:"small", style:"margin-left:auto; padding-bottom:6px"},
+      `${total.toLocaleString()} laps in ${S.length} sessions, ${new Set(S.map(s => s.car)).size} cars, ${tracks.length} tracks`)));
+
+  // laps for the chosen car + track, oldest first
+  const laps = [];
+  for (const s of S) if (s.track === sel.track && s.car === sel.car)
+    s.laps.forEach((l, i) => laps.push({...l, n:i + 1, date:s.date, sid:s.id}));
+  const valid = laps.filter(l => l.cuts === 0);
+  const best = valid.length ? valid.reduce((a, l) => l.ms < a.ms ? l : a) : null;
+  if (!best){ root.append(h("div", {class:"card empty"}, "No clean laps for this car here yet.")); return; }
+  const flying = valid.filter(l => l.ms <= best.ms * 1.15);
+  const shown = sel.all ? laps : flying;
+  const nSec = best.sectors.length;
+  const withSec = valid.filter(l => l.sectors.length === nSec && nSec > 0);
+  const bestSec = Array.from({length:nSec}, (_, i) => withSec.reduce((a, l) => l.sectors[i] < a.sectors[i] ? l : a));
+  const theo = bestSec.reduce((a, l, i) => a + l.sectors[i], 0);
+  const sessions = new Set(laps.map(l => l.sid)).size;
+
+  const tile = (k, v, n) => h("div", {class:"tile"}, h("div", {class:"k"}, k), h("div", {class:"v"}, v), h("div", {class:"n"}, n));
+  root.append(h("div", {class:"tiles"},
+    tile("Best lap", fmtLap(best.ms), fmtDateLong(best.date)),
+    nSec ? tile("Theoretical best", fmtLap(theo), theo < best.ms ? `${fmtSec(best.ms - theo)} s quicker than your best lap` : "Your best lap already has every best sector") : null,
+    tile("Typical flying lap", fmtLap(Math.round(median(flying.map(l => l.ms)))), `${fmtSec(median(flying.map(l => l.ms)) - best.ms)} s off your best`),
+    tile("Flying laps", String(flying.length), `of ${laps.length} laps in ${sessions} session${sessions === 1 ? "" : "s"}; within 15% of your best`)));
+
+  // 1. progression
+  const pc = h("div", {class:"card"}, h("h2", {}, "Lap times, in the order you drove them"),
+    h("p", {class:"sub"}, sel.all ? "Every saved lap, including out-laps and laps with cuts." : "Flying laps only: clean laps within 15% of your best."),
+    h("div", {class:"legend"}, h("span", {}, h("i", {class:"kdot"}), "Lap"), h("span", {}, h("i", {class:"kline"}), "Best so far")));
+  const holder = h("div"); pc.append(holder); root.append(pc);
+  progressChart(holder, shown, best);
+
+  // 2. sectors
+  if (nSec){
+    const gaps = bestSec.map((l, i) => best.sectors[i] - l.sectors[i]);
+    const maxGap = Math.max(500, ...gaps);
+    const sc = h("div", {class:"card"}, h("h2", {}, "Where your best lap left time"),
+      h("p", {class:"sub"}, theo < best.ms ? "How much slower each sector of your best lap was than your best-ever time through that sector."
+        : "Your best lap set your best time in every sector, so there is nothing to recover yet."));
+    const bars = h("div", {class:"bars", style:"margin-bottom:14px"});
+    gaps.forEach((g, i) => bars.append(h("div", {class:"bar one", tabindex:0,
+        onpointermove: e => showTip(e.clientX, e.clientY, `+${fmtSec(g)} s`, [`Sector ${i + 1}`, `Best lap ${fmtSec(best.sectors[i])} · best ever ${fmtSec(bestSec[i].sectors[i])}`]),
+        onpointerleave: hideTip,
+        onfocus: e => { const r = e.target.getBoundingClientRect(); showTip(r.left + 240, r.top, `+${fmtSec(g)} s`, [`Sector ${i + 1}`]); }, onblur: hideTip},
+      h("div", {class:"nm"}, `Sector ${i + 1}`), h("div", {class:"trk"}, h("i", {style:`width:${100 * g / maxGap}%`})),
+      h("div", {class:"val"}, g ? `+${fmtSec(g)} s` : "best"))));
+    sc.append(bars, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Sector"), h("th", {class:"r"}, "In your best lap"), h("th", {class:"r"}, "Best ever"), h("th", {}, "Set on"), h("th", {class:"r"}, "Gap"))),
+      h("tbody", {}, bestSec.map((l, i) => h("tr", {}, h("td", {}, `Sector ${i + 1}`), h("td", {class:"r"}, fmtSec(best.sectors[i])),
+        h("td", {class:"r"}, fmtSec(l.sectors[i])), h("td", {}, fmtDate(l.date)), h("td", {class:"r"}, gaps[i] ? `+${fmtSec(gaps[i])}` : "—"))))));
+    root.append(sc);
+  }
+
+  // 3. best lap per car on this track
+  const per = new Map();
+  for (const s of S) if (s.track === sel.track) for (const l of s.laps) if (l.cuts === 0){
+    const cur = per.get(s.car);
+    if (!cur) per.set(s.car, {car:s.car, name:s.carName, ms:l.ms, date:s.date, n:1});
+    else { cur.n++; if (l.ms < cur.ms){ cur.ms = l.ms; cur.date = s.date; } }
+  }
+  const rank = [...per.values()].sort((a, b) => a.ms - b.ms);
+  if (rank.length > 1){
+    const maxMs = rank[rank.length - 1].ms;
+    const rc = h("div", {class:"card"}, h("h2", {}, "Your best lap in each car here"),
+      h("p", {class:"sub"}, `${rank.length} cars, quickest first. ${carName(sel.car)} is highlighted.`));
+    const bars = h("div", {class:"bars"});
+    rank.forEach((r, i) => bars.append(h("div", {class:"bar" + (r.car === sel.car ? " sel" : ""), tabindex:0,
+        onpointermove: e => showTip(e.clientX, e.clientY, fmtLap(r.ms), [r.name, `${r.n} clean lap${r.n === 1 ? "" : "s"} · best set ${fmtDate(r.date)}`,
+          i ? `+${fmtSec(r.ms - rank[0].ms)} s to ${rank[0].name}` : "Quickest car here"]),
+        onpointerleave: hideTip,
+        onfocus: e => { const b = e.target.getBoundingClientRect(); showTip(b.left + 240, b.top, fmtLap(r.ms), [r.name]); }, onblur: hideTip,
+        onclick: () => { sel.car = r.car; buildLaps(); }},
+      h("div", {class:"nm", title:r.name}, r.name), h("div", {class:"trk"}, h("i", {style:`width:${100 * r.ms / maxMs}%`})),
+      h("div", {class:"val"}, fmtLap(r.ms)))));
+    rc.append(bars); root.append(rc);
+  }
+
+  // 4. table view
+  const tc = h("div", {class:"card"}, h("h2", {}, "Every lap"), h("p", {class:"sub"}, `${carName(sel.car)}, newest first.`));
+  tc.append(h("div", {class:"scroll"}, h("table", {},
+    h("thead", {}, h("tr", {}, h("th", {}, "Session"), h("th", {class:"r"}, "Lap"), h("th", {class:"r"}, "Time"),
+      Array.from({length:nSec}, (_, i) => h("th", {class:"r"}, `S${i + 1}`)), h("th", {class:"r"}, "To best"), h("th", {}, ""))),
+    h("tbody", {}, [...laps].reverse().map(l => h("tr", {},
+      h("td", {}, fmtDateLong(l.date)), h("td", {class:"r"}, String(l.n)), h("td", {class:"r"}, fmtLap(l.ms)),
+      Array.from({length:nSec}, (_, i) => h("td", {class:"r"}, l.sectors[i] != null ? fmtSec(l.sectors[i]) : "")),
+      h("td", {class:"r"}, l === best ? "best" : `+${fmtSec(l.ms - best.ms)}`),
+      h("td", {}, l.cuts ? `${l.cuts} cut${l.cuts === 1 ? "" : "s"}` : "")))))));
+  root.append(tc);
+}
+
+function niceStep(span, target){
+  for (const s of [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300]) if (span / s <= target) return s;
+  return 600;
+}
+function progressChart(holder, laps, best){
+  holder.replaceChildren();
+  if (!laps.length){ holder.append(h("div", {class:"empty"}, "No laps to show.")); return; }
+  const W = Math.max(420, holder.clientWidth || 900), H = 300, m = {l:58, r:112, t:14, b:36};
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, n = laps.length;
+  const lo = Math.min(...laps.map(l => l.ms)) / 1000, hi = Math.max(...laps.map(l => l.ms)) / 1000;
+  const step = niceStep(Math.max(hi - lo, 1), 6);
+  const y0 = Math.floor(lo / step) * step, y1 = Math.max(y0 + step, Math.ceil(hi / step) * step);
+  const X = i => m.l + (i + 0.5) * pw / n, Y = ms => m.t + ph * (1 - (ms / 1000 - y0) / (y1 - y0));
+  const svg = sv("svg", {viewBox:`0 0 ${W} ${H}`, width:"100%", height:H, role:"img",
+    "aria-label":"Lap times in the order driven, with the best lap so far"});
+  const tick = s => step < 1 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+  for (let v = y0; v <= y1 + 1e-9; v += step){
+    const y = Y(v * 1000);
+    svg.append(sv("line", {x1:m.l, x2:W - m.r, y1:y, y2:y, stroke:"var(--grid)", "stroke-width":1}),
+               sv("text", {x:m.l - 8, y:y + 4, "text-anchor":"end"}, tick(v)));
+  }
+  // session boundaries + dates along the bottom
+  let start = 0, lastLabelX = -1e9;
+  for (let i = 1; i <= n; i++){
+    if (i === n || laps[i].sid !== laps[start].sid){
+      if (i < n) svg.append(sv("line", {x1:m.l + i * pw / n, x2:m.l + i * pw / n, y1:m.t, y2:m.t + ph, stroke:"var(--grid)", "stroke-width":1}));
+      const cx = (X(start) + X(i - 1)) / 2;
+      if (cx - lastLabelX > 56){ svg.append(sv("text", {x:cx, y:H - 12, "text-anchor":"middle"}, fmtDate(laps[start].date))); lastLabelX = cx; }
+      start = i;
+    }
+  }
+  svg.append(sv("line", {x1:m.l, x2:W - m.r, y1:m.t + ph, y2:m.t + ph, stroke:"var(--axis)", "stroke-width":1}));
+  // best so far: a step line
+  let run = Infinity, d = "";
+  laps.forEach((l, i) => {
+    const prev = run; if (l.cuts === 0) run = Math.min(run, l.ms);
+    if (run === Infinity) return;
+    d += d ? ` L${X(i)},${Y(prev === Infinity ? run : prev)} L${X(i)},${Y(run)}` : `M${X(i)},${Y(run)}`;
+  });
+  if (d){
+    d += ` L${W - m.r},${Y(run)}`;
+    svg.append(sv("path", {d, fill:"none", stroke:"var(--s2)", "stroke-width":2, "stroke-linejoin":"round", "stroke-linecap":"round"}),
+      sv("text", {x:W - m.r + 8, y:Y(run) - 3, class:"lbl"}, "Best"),
+      sv("text", {x:W - m.r + 8, y:Y(run) + 12, class:"lbl", style:"font-variant-numeric:tabular-nums"}, fmtLap(run)));
+  }
+  const dots = laps.map((l, i) => sv("circle", {cx:X(i), cy:Y(l.ms), r:4, fill: l.cuts ? "var(--surface)" : "var(--s1)",
+    stroke: l.cuts ? "var(--s1)" : "var(--surface)", "stroke-width":2}));
+  svg.append(...dots);
+  const cross = sv("line", {y1:m.t, y2:m.t + ph, stroke:"var(--axis)", "stroke-width":1, visibility:"hidden"});
+  const hit = sv("rect", {x:m.l, y:m.t, width:pw, height:ph, fill:"transparent"});
+  let cur = -1;
+  const leave = () => { if (cur >= 0) dots[cur].setAttribute("r", 4); cur = -1; cross.setAttribute("visibility", "hidden"); hideTip(); };
+  hit.addEventListener("pointermove", e => {
+    const box = svg.getBoundingClientRect(), px = (e.clientX - box.left) * W / box.width;
+    const i = Math.max(0, Math.min(n - 1, Math.floor((px - m.l) / (pw / n))));
+    if (i !== cur){ if (cur >= 0) dots[cur].setAttribute("r", 4); cur = i; dots[i].setAttribute("r", 6);
+      cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible"); }
+    const l = laps[i];
+    showTip(e.clientX, e.clientY, fmtLap(l.ms), [
+      `Lap ${l.n} · ${fmtDateLong(l.date)}`,
+      l.sectors.length ? l.sectors.map((s, k) => `S${k + 1} ${fmtSec(s)}`).join(" · ") : null,
+      l === best ? "Your best lap" : `+${fmtSec(l.ms - best.ms)} s to your best`,
+      l.cuts ? `${l.cuts} track cut${l.cuts === 1 ? "" : "s"} (does not count)` : null].filter(Boolean));
+  });
+  hit.addEventListener("pointerleave", leave);
+  svg.insertBefore(cross, dots[0]); svg.append(hit);
+  holder.append(svg);
+}
+function drawLaps(){ if (lapData) buildLaps(); }
+
+// ------------------------------------------------------------------- track ---
+// Laps the board records itself (position, speed and pedals all the way round).
+let rec = null, ta = null;
+const trk = {track:null, car:null, lap:null, ref:null, mode:"speed", mph:true};
+try { trk.mph = localStorage.getItem("rig_units") !== "kmh"; trk.mode = localStorage.getItem("rig_mapmode") || "speed"; } catch (e) {}
+const spdU = v => trk.mph ? v * 0.621371 : v;
+const unit = () => trk.mph ? "mph" : "km/h";
+const isDark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+const signed = (ms, d = 3) => (ms > 0 ? "+" : ms < 0 ? "−" : "") + (Math.abs(ms) / 1000).toFixed(d);
+const pct = v => Math.round(v * 100) + "%";
+
+function mix(stops, t){                     // colour along a list of hex stops, t in 0..1
+  t = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(t)), f = t - i;
+  const a = stops[i], b = stops[i + 1], c = k => Math.round(parseInt(a.substr(k, 2), 16) * (1 - f) + parseInt(b.substr(k, 2), 16) * f);
+  return `rgb(${c(1)},${c(3)},${c(5)})`;
+}
+// one hue, more = stronger against the surface; two hues round a neutral grey
+const seqStops = () => isDark() ? ["#184f95", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"]
+                                : ["#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
+const divStops = () => isDark() ? ["#3987e5", "#5b5a55", "#e66767"] : ["#2a78d6", "#c3c2b7", "#e34948"];
+
+async function drawTrack(){
+  const root = $("#tab-track");
+  let d = null;
+  try { d = await api("/api/rec/laps"); } catch (e) {}
+  if (!d || !d.laps){
+    root.replaceChildren(h("div", {class:"card empty"}, "The lap recorder isn't running in this copy of the board. Start MOZA Rig from the Desktop again to switch it on."));
+    return;
+  }
+  rec = d;
+  if (!rec.laps.length){
+    const r = st.recorder;
+    root.replaceChildren(h("div", {class:"card"}, h("h2", {}, "No recorded laps yet"),
+      h("p", {class:"sub"}, "The recorder saves a lap each time you cross the line with MOZA Rig running. " +
+        "The lap out of the pits doesn't count, so the map appears after your second time past the line."),
+      h("div", {class:"small"}, r && r.connected ? `Recorder is connected: ${carName(r.car)}. ` + (r.whole ? "Recording this lap." : "Waiting for you to cross the line.")
+        : "Recorder is waiting for a session to start.")));
+    return;
+  }
+  for (const l of rec.laps) carNames[l.car] = l.carName;
+  const last = rec.laps[rec.laps.length - 1];
+  if (!trk.track || !rec.laps.some(l => l.track === trk.track && l.car === trk.car)){
+    trk.track = last.track; trk.car = last.car; trk.lap = trk.ref = null;
+  }
+  const q = new URLSearchParams({track:trk.track, car:trk.car, units: trk.mph ? "mph" : "kmh"});
+  if (trk.lap) q.set("lap", trk.lap);
+  if (trk.ref) q.set("ref", trk.ref);
+  ta = await api("/api/rec/analysis?" + q);
+  if (ta.error){ root.replaceChildren(h("div", {class:"card empty"}, ta.error)); return; }
+  renderTrack();
+}
+
+function renderTrack(){
+  const root = $("#tab-track"), a = ta, same = a.lap.id === a.ref.id;
+  root.replaceChildren();
+  const tracks = [...new Map(rec.laps.map(l => [l.track, l.trackName])).entries()];
+  const cars = [...new Map(rec.laps.filter(l => l.track === trk.track).map(l => [l.car, l.carName])).entries()];
+  const newest = [...a.laps].reverse();
+  const label = l => `${fmtDateLong(l.date)} · ${fmtLap(l.ms)}${l.id === a.best.id ? " · best" : ""}${l.cuts ? " · cut" : ""}`;
+  const pickSel = (cur, on) => h("select", {onchange: e => on(e.target.value)},
+    newest.map(l => h("option", {value:l.id, selected: l.id === cur}, label(l))));
+  const setMode = v => { trk.mode = v; try { localStorage.setItem("rig_mapmode", v); } catch (e) {} renderTrack(); };
+  root.append(h("div", {class:"filters"},
+    h("label", {}, "Track", h("select", {onchange: e => { trk.track = e.target.value; trk.car = null; drawTrack(); }},
+      tracks.map(([id, n]) => h("option", {value:id, selected:id === trk.track}, n)))),
+    h("label", {}, "Car", h("select", {onchange: e => { trk.car = e.target.value; trk.lap = trk.ref = null; drawTrack(); }},
+      cars.map(([id, n]) => h("option", {value:id, selected:id === trk.car}, n)))),
+    h("label", {}, "Lap", pickSel(a.lap.id, v => { trk.lap = v === newest[0].id ? null : v; drawTrack(); })),
+    h("label", {}, "Compared with", pickSel(a.ref.id, v => { trk.ref = v === a.best.id ? null : v; drawTrack(); })),
+    h("label", {}, "Speeds in", h("select", {onchange: e => { trk.mph = e.target.value === "mph";
+        try { localStorage.setItem("rig_units", trk.mph ? "mph" : "kmh"); } catch (er) {} drawTrack(); }},
+      h("option", {value:"mph", selected: trk.mph}, "mph"), h("option", {value:"kmh", selected: !trk.mph}, "km/h"))),
+    h("div", {class:"small", style:"margin-left:auto; padding-bottom:6px"}, `${a.laps.length} recorded lap${a.laps.length === 1 ? "" : "s"} in this car here`)));
+
+  const top3 = a.corners.map(c => Math.max(0, c.lost_ms)).sort((x, y) => y - x).slice(0, 3).reduce((x, y) => x + y, 0);
+  const tile = (k, v, n) => h("div", {class:"tile"}, h("div", {class:"k"}, k), h("div", {class:"v"}, v), h("div", {class:"n"}, n));
+  root.append(h("div", {class:"tiles"},
+    tile("This lap", fmtLap(a.lap.ms), same ? "This is also the lap it is compared with" : `${signed(a.lap.ms - a.ref.ms)} s against the compared lap`),
+    tile("Ideal lap", fmtLap(a.ideal_ms), a.pool > 1 ? `Your quickest 25 slices from ${a.pool} laps joined up; ${fmtSec(Math.max(0, a.best.ms - a.ideal_ms))} s under your best`
+      : "Needs more than one lap to mean anything"),
+    top3 > 0 ? tile("Three corners fixed", fmtLap(a.lap.ms - top3), `This lap with its three costliest corners taken like your quickest pass (${fmtSec(top3)} s)`) : null,
+    tile("Top speed", `${spdU(a.top).toFixed(0)} ${unit()}`, `Slowest point ${spdU(a.slowest).toFixed(0)} ${unit()}`),
+    tile("Full throttle", pct(a.pedals.full), `${pct(a.pedals.brake)} braking · ${pct(a.pedals.coast)} on neither pedal`)));
+
+  // shared hover: map and every trace point at the same place on the track
+  const hover = {fns:[]};
+  const cornerAt = i => a.corners.find(c => i * a.step >= c.from && i * a.step < c.to);
+  hover.at = (i, x, y) => {
+    for (const f of hover.fns) f(i);
+    if (i == null) return hideTip();
+    const c = cornerAt(i), lines = [];
+    if (!same) lines.push(`Compared lap ${spdU(a.ref_spd[i]).toFixed(0)} ${unit()}`, `${signed(a.delta[i], 2)} s by this point`);
+    lines.push(`Throttle ${Math.round(a.thr[i] * 100)}% · brake ${Math.round(a.brk[i] * 100)}% · gear ${a.gear[i] < 0 ? "R" : a.gear[i] || "N"}`,
+      `${a.dist[i].toLocaleString()} m from the line${c ? ` · Turn ${c.n}` : ""}`);
+    showTip(x, y, `${spdU(a.spd[i]).toFixed(0)} ${unit()}`, lines);
+  };
+
+  const modeSub = {speed:"Coloured by your speed on this lap. The scale under the map runs from your slowest point to your fastest.",
+    delta: same ? "Pick a different lap to compare with to see where time was gained and lost." : "Coloured by where this lap gained or lost time against the compared lap.",
+    pedals:"Coloured by what your feet were doing."}[trk.mode];
+  const mapCard = h("div", {class:"card"},
+    h("div", {class:"row-head", style:"flex-wrap:nowrap; align-items:flex-start"}, h("div", {}, h("h2", {}, "Track map"), h("p", {class:"sub"}, modeSub)),
+      h("label", {class:"small", style:"display:flex; flex-direction:column; gap:3px"}, "Colour by",
+        h("select", {onchange: e => setMode(e.target.value)},
+          [["speed", "Speed"], ["delta", "Time gained or lost"], ["pedals", "Pedals"]].map(([v, n]) => h("option", {value:v, selected:v === trk.mode}, n))))));
+  const mapHolder = h("div"); mapCard.append(mapHolder);
+  const tipsCard = h("div", {class:"card"}, h("h2", {}, "Where to find time"),
+    h("p", {class:"sub"}, "This lap against your quickest pass through each corner, on any recorded lap."));
+  if (a.tips.length) tipsCard.append(h("ul", {class:"tips"}, a.tips.map(t => h("li", {},
+    h("div", {class:"t"}, t.title, t.gain_ms ? h("span", {}, `worth ${fmtSec(t.gain_ms)} s`) : null), h("p", {}, t.text)))));
+  else tipsCard.append(h("div", {class:"empty"}, a.pool < 2 ? "Record a few more laps. Suggestions come from comparing this lap with your quickest pass through each corner."
+    : "Nothing stands out: this lap is within a few hundredths of your quickest pass through every corner."));
+  root.append(h("div", {class:"two"}, mapCard, tipsCard));
+  trackMap(mapHolder, a, hover, same);
+
+  const tr = h("div", {class:"card"}, h("h2", {}, "Lap against lap"),
+    h("p", {class:"sub"}, "Every trace is plotted against distance round the lap, so the same corner lines up in each."),
+    same ? null : h("div", {class:"legend"}, h("span", {}, h("i", {class:"kline one"}), "This lap"), h("span", {}, h("i", {class:"kline"}), "Compared lap")));
+  const trHolder = h("div"); tr.append(trHolder); root.append(tr);
+  traces(trHolder, a, hover, same);
+
+  // corner by corner
+  const maxLost = Math.max(100, ...a.corners.map(c => c.lost_ms));
+  const brakeTxt = c => c.brake_later_m == null ? "no braking" : c.brake_later_m === 0 ? "same place" :
+    c.brake_later_m > 0 ? `${c.brake_later_m} m later` : `${-c.brake_later_m} m earlier`;
+  const pair = (x, y) => `${spdU(x).toFixed(0)} / ${spdU(y).toFixed(0)}`;
+  if (a.corners.length) root.append(h("div", {class:"card"}, h("h2", {}, "Corner by corner"),
+    h("p", {class:"sub"}, `Speeds in ${unit()}, this lap / your quickest pass. Time lost includes the straight that follows, since a slow exit costs all the way down it.`),
+    h("div", {class:"scroll"}, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Turn"), h("th", {class:"r"}, "From the line"),
+      h("th", {class:"r"}, "Slowest point"), h("th", {}, "Braking point"), h("th", {class:"r"}, "100 m after"), h("th", {}, "Time lost"), h("th", {}, "Quickest pass"))),
+      h("tbody", {}, a.corners.map(c => h("tr", {}, h("td", {}, `Turn ${c.n}`), h("td", {class:"r"}, `${c.at_m.toLocaleString()} m`),
+        h("td", {class:"r"}, pair(c.min, c.best_min)), h("td", {}, brakeTxt(c)), h("td", {class:"r"}, pair(c.exit_spd, c.best_exit)),
+        h("td", {class:"num"}, h("span", {class:"mini", style:`width:${Math.max(0, 70 * c.lost_ms / maxLost)}px`}), c.best_is_this ? "quickest" : `+${fmtSec(c.lost_ms)} s`),
+        h("td", {}, c.best_is_this ? "this lap" : fmtDate(c.best_date)))))))));
+
+  // 25 slices
+  const sl = h("div", {class:"card"}, h("h2", {}, "Time lost in each slice of the lap"),
+    h("p", {class:"sub"}, "The lap cut into 25 equal slices. Each bar is how much slower this lap was than your best time through that slice."));
+  const slHolder = h("div"); sl.append(slHolder); root.append(sl);
+  sliceChart(slHolder, a);
+}
+
+function trackMap(holder, a, hover, same){
+  if (!a.has_map){ holder.append(h("div", {class:"empty"}, "The game didn't send the car's position for this lap, so there is no map. The traces below still work.")); return; }
+  const n = a.n, X = a.x, Z = a.z, pad = 34;
+  const W = Math.max(320, holder.clientWidth || 600), H = Math.round(Math.min(520, W * 0.78));
+  const x0 = Math.min(...X), x1 = Math.max(...X), z0 = Math.min(...Z), z1 = Math.max(...Z);
+  const s = Math.min((W - 2 * pad) / Math.max(1, x1 - x0), (H - 2 * pad) / Math.max(1, z1 - z0));
+  const ox = (W - (x1 - x0) * s) / 2, oz = (H - (z1 - z0) * s) / 2;
+  const px = i => ox + (X[i] - x0) * s, py = i => oz + (Z[i] - z0) * s;      // same way up as the game's own map
+  // what each point is coloured by
+  let col, legend;
+  if (trk.mode === "pedals"){
+    const c = {brake:"var(--s2)", on:"var(--s1)", coast:"var(--muted)"};
+    col = i => a.brk[i] > 0.05 ? c.brake : a.thr[i] > 0.2 ? c.on : c.coast;
+    legend = h("div", {class:"scale"}, [["On the throttle", c.on], ["Braking", c.brake], ["Neither pedal", c.coast]].map(([t, v]) =>
+      h("span", {class:"sw"}, h("i", {style:`background:${v}`}), t)));
+  } else if (trk.mode === "delta" && !same){
+    const w = Math.max(2, Math.round(n / 100)), rate = a.delta.map((_, i) => a.delta[Math.min(n - 1, i + w)] - a.delta[Math.max(0, i - w)]);
+    const sorted = rate.map(Math.abs).sort((p, q) => p - q), lim = Math.max(30, sorted[Math.floor(n * 0.97)]);
+    const stops = divStops();
+    col = i => mix(stops, 0.5 + 0.5 * Math.max(-1, Math.min(1, rate[i] / lim)));
+    legend = h("div", {class:"scale"}, "Gaining time", h("div", {class:"grad", style:`background:linear-gradient(90deg, ${stops.join(",")})`}), "Losing time");
+  } else {
+    const lo = Math.min(...a.spd), hi = Math.max(...a.spd), stops = seqStops();
+    col = i => mix(stops, (a.spd[i] - lo) / Math.max(1, hi - lo));
+    legend = h("div", {class:"scale"}, `${spdU(lo).toFixed(0)} ${unit()}`,
+      h("div", {class:"grad", style:`background:linear-gradient(90deg, ${stops.join(",")})`}), `${spdU(hi).toFixed(0)} ${unit()}`);
+  }
+  const svg = sv("svg", {viewBox:`0 0 ${W} ${H}`, width:"100%", height:H, role:"img", "aria-label":"Map of the lap, coloured along the driving line"});
+  const pts = Array.from({length:n}, (_, i) => `${px(i).toFixed(1)},${py(i).toFixed(1)}`).join(" ");
+  svg.append(sv("polygon", {points:pts, fill:"none", stroke:"var(--track)", "stroke-width":14, "stroke-linejoin":"round"}));
+  for (let i = 0; i < n; i++){
+    const j = (i + 1) % n;
+    svg.append(sv("line", {x1:px(i).toFixed(1), y1:py(i).toFixed(1), x2:px(j).toFixed(1), y2:py(j).toFixed(1), stroke:col(i), "stroke-width":6, "stroke-linecap":"round"}));
+  }
+  const cx = X.reduce((p, q) => p + q, 0) / n, cz = Z.reduce((p, q) => p + q, 0) / n;
+  const out = (i, d) => { const vx = X[i] - cx, vz = Z[i] - cz, m = Math.hypot(vx, vz) || 1; return [px(i) + d * vx / m, py(i) + d * vz / m]; };
+  for (const c of a.corners){                                   // number the corners just outside the line
+    const i = Math.min(n - 1, Math.round(c.apex / a.step)), [tx, ty] = out(i, 20);
+    svg.append(sv("text", {x:tx, y:ty + 4, "text-anchor":"middle", class:"lbl"}, `T${c.n}`));
+  }
+  const [sx, sy] = out(0, -20);
+  svg.append(sv("circle", {cx:px(0), cy:py(0), r:5, fill:"var(--ink)", stroke:"var(--surface)", "stroke-width":2}),
+             sv("text", {x:sx, y:sy + 4, "text-anchor":"middle", class:"lbl"}, "Start"));
+  const dot = sv("circle", {r:7, fill:"var(--ink)", stroke:"var(--surface)", "stroke-width":2, visibility:"hidden"});
+  svg.append(dot);
+  hover.fns.push(i => { if (i == null) return dot.setAttribute("visibility", "hidden");
+    dot.setAttribute("cx", px(i)); dot.setAttribute("cy", py(i)); dot.setAttribute("visibility", "visible"); });
+  svg.addEventListener("pointermove", e => {
+    const b = svg.getBoundingClientRect(), mx = (e.clientX - b.left) * W / b.width, my = (e.clientY - b.top) * H / b.height;
+    let best = -1, bd = 45 * 45;                                 // only when the pointer is near the line
+    for (let i = 0; i < n; i++){ const d = (px(i) - mx) ** 2 + (py(i) - my) ** 2; if (d < bd){ bd = d; best = i; } }
+    hover.at(best < 0 ? null : best, e.clientX, e.clientY);
+  });
+  svg.addEventListener("pointerleave", () => hover.at(null));
+  holder.append(svg, legend);
+}
+
+function traces(holder, a, hover, same){
+  const n = a.n, W = Math.max(420, holder.clientWidth || 900), m = {l:52, r:14}, pw = W - m.l - m.r;
+  const total = Math.max(1, a.dist[n - 1]), xAt = i => m.l + pw * a.dist[i] / total;
+  const charts = [
+    {title:`Speed (${unit()})`, h:170, series:[a.spd.map(spdU)].concat(same ? [] : [a.ref_spd.map(spdU)]), fmt:v => v.toFixed(0), marks:true},
+    same ? null : {title:"Time against the compared lap (s): above the line is slower", h:110, series:[a.delta.map(v => v / 1000)], zero:true,
+      fmt:v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(v % 1 ? 1 : 0), wash:true},
+    {title:"Throttle (%)", h:78, series:[a.thr.map(v => v * 100)].concat(same ? [] : [a.ref_thr.map(v => v * 100)]), fixed:[0, 100], fmt:v => v.toFixed(0)},
+    {title:"Brake (%)", h:78, series:[a.brk.map(v => v * 100)].concat(same ? [] : [a.ref_brk.map(v => v * 100)]), fixed:[0, 100], fmt:v => v.toFixed(0), axis:true},
+  ].filter(Boolean);
+  const colors = ["var(--s1)", "var(--s2)"];
+  for (const c of charts){
+    const H = c.h + (c.axis ? 26 : 8), top = 14, ph = c.h - top;
+    let lo = c.fixed ? c.fixed[0] : Math.min(...c.series.flat()), hi = c.fixed ? c.fixed[1] : Math.max(...c.series.flat());
+    if (c.zero){ const mx = Math.max(Math.abs(lo), Math.abs(hi), 0.1); lo = Math.min(lo, -0.05 * mx); hi = Math.max(hi, 0.05 * mx); }
+    if (hi - lo < 1e-6) hi = lo + 1;
+    const step = c.fixed ? 50 : [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100].find(sx => (hi - lo) / sx <= 4) || 200;
+    if (!c.fixed){ lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step; }
+    const Y = v => top + ph * (1 - (v - lo) / (hi - lo));
+    const svg = sv("svg", {viewBox:`0 0 ${W} ${H}`, width:"100%", height:H, role:"img", "aria-label":c.title});
+    for (let v = lo; v <= hi + 1e-9; v += step)
+      svg.append(sv("line", {x1:m.l, x2:W - m.r, y1:Y(v), y2:Y(v), stroke: c.zero && Math.abs(v) < 1e-9 ? "var(--axis)" : "var(--grid)", "stroke-width":1}),
+                 sv("text", {x:m.l - 8, y:Y(v) + 4, "text-anchor":"end"}, c.fmt(v)));
+    for (const k of a.corners){                                  // corners as faint uprights, named once on the top chart
+      const i = Math.min(n - 1, Math.round(k.apex / a.step));
+      svg.append(sv("line", {x1:xAt(i), x2:xAt(i), y1:top, y2:top + ph, stroke:"var(--grid)", "stroke-width":1}));
+      if (c.marks) svg.append(sv("text", {x:xAt(i), y:10, "text-anchor":"middle"}, `T${k.n}`));
+    }
+    c.series.slice().reverse().forEach((vals, r) => {             // the compared lap goes underneath
+      const k = c.series.length - 1 - r, d = vals.map((v, i) => `${i ? "L" : "M"}${xAt(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+      if (c.wash) svg.append(sv("path", {d: d + `L${xAt(n - 1)},${Y(0)}L${xAt(0)},${Y(0)}Z`, fill:"var(--wash)"}));
+      svg.append(sv("path", {d, fill:"none", stroke:colors[k], "stroke-width":2, "stroke-linejoin":"round", "stroke-linecap":"round"}));
+    });
+    if (c.axis){
+      const ds = [100, 200, 250, 500, 1000, 2000, 2500, 5000].find(sx => total / sx <= 9) || 10000;
+      for (let dm = 0; dm <= total; dm += ds)
+        svg.append(sv("text", {x:m.l + pw * dm / total, y:c.h + 16, "text-anchor":"middle"}, dm >= 1000 ? `${(dm / 1000).toFixed(dm % 1000 ? 1 : 0)} km` : `${dm} m`));
+    }
+    const cross = sv("line", {y1:top, y2:top + ph, stroke:"var(--axis)", "stroke-width":1, visibility:"hidden"});
+    const hit = sv("rect", {x:m.l, y:0, width:pw, height:c.h, fill:"transparent"});
+    hover.fns.push(i => { if (i == null) return cross.setAttribute("visibility", "hidden");
+      cross.setAttribute("x1", xAt(i)); cross.setAttribute("x2", xAt(i)); cross.setAttribute("visibility", "visible"); });
+    hit.addEventListener("pointermove", e => {
+      const b = svg.getBoundingClientRect(), target = ((e.clientX - b.left) * W / b.width - m.l) / pw * total;
+      let lo2 = 0, hi2 = n - 1;                                   // nearest point by distance
+      while (lo2 < hi2){ const mid = (lo2 + hi2) >> 1; if (a.dist[mid] < target) lo2 = mid + 1; else hi2 = mid; }
+      hover.at(lo2, e.clientX, e.clientY);
+    });
+    hit.addEventListener("pointerleave", () => hover.at(null));
+    svg.append(cross, hit);
+    holder.append(h("div", {class:"chart-title"}, c.title), svg);
+  }
+}
+
+function sliceChart(holder, a){
+  const k = a.minis.length, W = Math.max(420, holder.clientWidth || 900), H = 190, m = {l:52, r:14, t:10, b:26};
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, band = pw / k, bw = Math.min(24, band - 4);
+  const hi = Math.max(0.2, ...a.minis.map(s => s.lost_ms / 1000)), step = [0.05, 0.1, 0.2, 0.5, 1, 2, 5].find(s => hi / s <= 4) || 10;
+  const top = Math.ceil(hi / step) * step, Y = v => m.t + ph * (1 - v / top);
+  const svg = sv("svg", {viewBox:`0 0 ${W} ${H}`, width:"100%", height:H, role:"img", "aria-label":"Time lost in each of 25 slices of the lap"});
+  for (let v = 0; v <= top + 1e-9; v += step)
+    svg.append(sv("line", {x1:m.l, x2:W - m.r, y1:Y(v), y2:Y(v), stroke: v ? "var(--grid)" : "var(--axis)", "stroke-width":1}),
+               sv("text", {x:m.l - 8, y:Y(v) + 4, "text-anchor":"end"}, `+${v.toFixed(step < 0.1 ? 2 : 1)}`));
+  a.minis.forEach((s, i) => {
+    const x = m.l + i * band + (band - bw) / 2, v = Math.max(0, s.lost_ms / 1000), y = Y(v), hgt = m.t + ph - y, r = Math.min(4, hgt);
+    const bar = sv("path", {fill:"var(--s1)", d: hgt < 0.5 ? "" : `M${x},${m.t + ph}V${y + r}Q${x},${y} ${x + r},${y}H${x + bw - r}Q${x + bw},${y} ${x + bw},${y + r}V${m.t + ph}Z`});
+    const hit = sv("rect", {x: m.l + i * band, y:m.t, width:band, height:ph, fill:"transparent", tabindex:0});
+    const tipFor = (cx, cy) => showTip(cx, cy, `+${fmtSec(Math.max(0, s.lost_ms))} s`, [
+      `Slice ${s.k} of ${k}, from ${s.from_m.toLocaleString()} m`, `This lap ${fmtSec(s.ms)} s · your best ${fmtSec(s.best_ms)} s`,
+      a.pool > 1 ? `Varies about ±${(s.spread_ms / 1000).toFixed(2)} s lap to lap` : null].filter(Boolean));
+    hit.addEventListener("pointermove", e => { bar.setAttribute("opacity", .75); tipFor(e.clientX, e.clientY); });
+    hit.addEventListener("pointerleave", () => { bar.setAttribute("opacity", 1); hideTip(); });
+    hit.addEventListener("focus", () => { const b = hit.getBoundingClientRect(); tipFor(b.left + b.width, b.top); });
+    hit.addEventListener("blur", hideTip);
+    svg.append(bar, hit);
+    if (i % 5 === 0) svg.append(sv("text", {x:m.l + i * band + band / 2, y:H - 8, "text-anchor":"middle"},
+      a.length_m >= 2000 ? `${(s.from_m / 1000).toFixed(1)} km` : `${s.from_m} m`));
+  });
+  holder.append(svg);
+}
+
+// --------------------------------------------------------------- status ---
+function chips(){
+  const d = st.dash, hp = st.haptics, onTrack = d && d.connected && d.car;
+  const chip = (on, label, value) => h("span", {class:"chip"}, h("i", {class:"dot" + (on ? " on" : "")}), label, h("b", {}, value));
+  const r = st.recorder, recOn = !!(r && r.connected);
+  $("#chips").replaceChildren(
+    chip(onTrack, "Game", onTrack ? carName(d.car) : "no session"),
+    chip(!!d, "Wheel screen and lights", d ? "running" : "not running"),
+    chip(!!hp, "Pedal haptics", hp ? (hp.game ? "playing" : "ready") : "not running"),
+    chip(recOn, "Lap recorder", recOn ? (r.whole ? "recording this lap" : "waiting for the line") : "idle"));
+}
+async function poll(){
+  try {
+    const s = await api("/api/state");
+    const hadPedals = st.haptics ? st.haptics.pedals.join() : null;
+    st = s;
+    if (s.dash && s.dash.car) carNames[s.dash.car] = s.dash.carName || s.dash.car;
+    chips(); liveHaptics(); liveLights();
+    if (s.haptics && hadPedals !== null && hadPedals !== s.haptics.pedals.join()) buildHaptics();
+  } catch (e){ $("#chips").replaceChildren(h("span", {class:"chip"}, h("i", {class:"dot"}), "Control board", h("b", {}, "not reachable"))); }
+}
+
+(async function init(){
+  [cfg, st, lapData] = await Promise.all([api("/api/config"), api("/api/state"), api("/api/laps")]);
+  for (const s of lapData.sessions) carNames[s.car] = s.carName;
+  if (st.dash && st.dash.car) carNames[st.dash.car] = st.dash.carName || st.dash.car;
+  chips(); buildHaptics(); buildLights();
+  let tab = "haptics"; try { tab = localStorage.getItem("rig_tab") || tab; } catch (e) {}
+  showTab(TABS.includes(tab) ? tab : "haptics");
+  setInterval(poll, 500);
+  setInterval(liveLights, 100);
+  setInterval(async () => { const d = await api("/api/laps");            // new sessions appear when you leave one
+    if (d.sessions.length !== lapData.sessions.length){ lapData = d; if (!$("#tab-laps").hidden) buildLaps(); } }, 15000);
+  setInterval(async () => {                                              // a new recorded lap: redraw if you are following the latest
+    if ($("#tab-track").hidden || !rec || trk.lap) return;
+    const d = await api("/api/rec/laps");
+    if (d.laps && d.laps.length !== rec.laps.length) drawTrack();
+  }, 5000);
+  let rs; addEventListener("resize", () => { clearTimeout(rs); rs = setTimeout(() => {
+    if (!$("#tab-laps").hidden) buildLaps();
+    if (!$("#tab-track").hidden && ta && !ta.error) renderTrack(); }, 150); });
+})();
+</script>
+</body>
+</html>
