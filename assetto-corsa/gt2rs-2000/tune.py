@@ -4,7 +4,7 @@
 The mod's own files are not in this repository. This script makes the same edits
 to an installed copy of the car, so the tune can be rebuilt from the original mod:
 
-    slicks      a third tyre compound, cloned from the Cup 2 with more grip
+    slicks      a third tyre compound, cloned from the Cup 2 with more grip, and the one the car loads on
     brakes      brake torque 4150 -> 6000 N·m
     downforce   front, rear and diffuser lift x3, drag on the rear wing
     springs     stiffer springs and dampers to carry the downforce
@@ -84,6 +84,7 @@ class Car:
 
 
 def slicks(t: str) -> str:
+    t = set_key(t, "COMPOUND_DEFAULT", "INDEX", 2)      # the car loads on slicks unless a setup says otherwise
     if "[FRONT_2]" in t:
         return t
     nl = "\r\n" if "\r\n" in t else "\n"
